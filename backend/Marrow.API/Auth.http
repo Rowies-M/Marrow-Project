@@ -1,0 +1,30 @@
+@baseUrl = https://localhost:7199
+@password = {{$dotenv MARROW_TEST_PASSWORD}}
+
+### Registrar usuario
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "nombreUsuario": "guerrero1",
+  "email": "guerrero1@example.com",
+  "password": "{{password}}"
+}
+
+### Iniciar sesión con nombre de usuario
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "guerrero1",
+  "password": "{{password}}"
+}
+
+### Iniciar sesión con email
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "guerrero1@example.com",
+  "password": "{{password}}"
+}

@@ -1,50 +1,75 @@
+using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
+using Microsoft.AspNetCore.Identity;
 
 namespace Marrow.API.Services;
 
-public class UsuarioService(IUsuarioRepository usuarioRepository) : IUsuarioService
+public sealed class UsuarioService(
+    IUsuarioRepository usuarioRepository,
+    IPasswordHasher<Usuario> passwordHasher) : IUsuarioService
 {
-    public Task<Usuario?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<UsuarioResponse> RegistrarAsync(
+        RegistroUsuarioRequest request,
+        CancellationToken cancellationToken = default)
     {
-        ValidarId(id);
-        return usuarioRepository.ObtenerPorIdAsync(id, cancellationToken);
-    }
+        ArgumentNullException.ThrowIfNull(request);
+        ValidarRegistro(request);
 
-    public async Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default)
-    {
-        ValidarUsuario(usuario);
+        var nombreUsuario = request.NombreUsuario.Trim();
+        var email = request.Email.Trim().ToLowerInvariant();
 
-        if (await usuarioRepository.ObtenerPorNombreUsuarioAsync(usuario.NombreUsuario, cancellationToken) is not null ||
-            await usuarioRepository.ObtenerPorEmailAsync(usuario.Email, cancellationToken) is not null)
+        if (await usuarioRepository.ObtenerPorNombreUsuarioAsync(nombreUsuario, cancellationToken) is not null ||
+            await usuarioRepository.ObtenerPorEmailAsync(email, cancellationToken) is not null)
         {
             throw new InvalidOperationException("El nombre de usuario o email ya está registrado.");
         }
 
-        usuario.FechaCreacion = usuario.FechaCreacion == default ? DateTime.UtcNow : usuario.FechaCreacion;
-        return await usuarioRepository.CrearAsync(usuario, cancellationToken);
+        var usuario = new Usuario
+        {
+            NombreUsuario = nombreUsuario,
+            Email = email,
+            FechaCreacion = DateTime.UtcNow
+        };
+
+        usuario.PasswordHash = passwordHasher.HashPassword(usuario, request.Password);
+        var usuarioCreado = await usuarioRepository.CrearAsync(usuario, cancellationToken);
+
+        return MapearRespuesta(usuarioCreado);
     }
 
-    private static void ValidarUsuario(Usuario usuario)
+    public async Task<UsuarioResponse?> AutenticarAsync(
+        LoginUsuarioRequest request,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(usuario);
+        ArgumentNullException.ThrowIfNull(request);
 
-        if (string.IsNullOrWhiteSpace(usuario.NombreUsuario) || string.IsNullOrWhiteSpace(usuario.Email))
+        var identificador = request.Usuario.Trim();
+        var usuario = await usuarioRepository.ObtenerPorNombreUsuarioAsync(identificador, cancellationToken)
+            ?? await usuarioRepository.ObtenerPorEmailAsync(identificador.ToLowerInvariant(), cancellationToken);
+
+        if (usuario is null ||
+            passwordHasher.VerifyHashedPassword(usuario, usuario.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
         {
-            throw new ArgumentException("El nombre de usuario y el email son obligatorios.");
+            return null;
         }
 
-        if (string.IsNullOrWhiteSpace(usuario.PasswordHash))
-        {
-            throw new ArgumentException("El usuario debe recibir un hash de contraseña válido.", nameof(usuario));
-        }
+        return MapearRespuesta(usuario);
     }
 
-    private static void ValidarId(int id)
+    private static UsuarioResponse MapearRespuesta(Usuario usuario) => new(
+        usuario.Id,
+        usuario.NombreUsuario,
+        usuario.Email,
+        new DateTimeOffset(DateTime.SpecifyKind(usuario.FechaCreacion, DateTimeKind.Utc)));
+
+    private static void ValidarRegistro(RegistroUsuarioRequest request)
     {
-        if (id <= 0)
+        if (string.IsNullOrWhiteSpace(request.NombreUsuario) ||
+            string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Password))
         {
-            throw new ArgumentException("El id debe ser mayor que cero.", nameof(id));
+            throw new ArgumentException("Los datos de registro son obligatorios.");
         }
     }
 }

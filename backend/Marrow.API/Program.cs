@@ -1,7 +1,9 @@
 using Marrow.API.Data;
 using Marrow.API.Interfaces;
+using Marrow.API.Models;
 using Marrow.API.Repositories;
 using Marrow.API.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +15,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<MarrowDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("MarrowDatabase")));
+builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IPersonajeRepository, PersonajeRepository>();
 builder.Services.AddScoped<IEnemigoRepository, EnemigoRepository>();

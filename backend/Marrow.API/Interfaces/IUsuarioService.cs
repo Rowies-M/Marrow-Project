@@ -1,10 +1,10 @@
-using Marrow.API.Models;
+using Marrow.API.DTOs;
 
 namespace Marrow.API.Interfaces;
 
 public interface IUsuarioService
 {
-    Task<Usuario?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<UsuarioResponse> RegistrarAsync(RegistroUsuarioRequest request, CancellationToken cancellationToken = default);
 
-    Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default);
+    Task<UsuarioResponse?> AutenticarAsync(LoginUsuarioRequest request, CancellationToken cancellationToken = default);
 }
