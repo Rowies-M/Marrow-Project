@@ -73,3 +73,24 @@ Content-Type: application/json
   "usuario": "guerrero1@example.com",
   "password": "{{password}}"
 }
+
+### Crear partida para un personaje propio
+POST {{baseUrl}}/api/partidas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "personajeId": {{personajeId}}
+}
+
+### Listar partidas propias
+GET {{baseUrl}}/api/partidas
+Authorization: Bearer {{token}}
+
+### Obtener partida propia
+GET {{baseUrl}}/api/partidas/{{partidaId}}
+Authorization: Bearer {{token}}
+
+### Finalizar partida propia
+PATCH {{baseUrl}}/api/partidas/{{partidaId}}/finalizar
+Authorization: Bearer {{token}}

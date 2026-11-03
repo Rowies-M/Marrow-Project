@@ -4,9 +4,14 @@ namespace Marrow.API.Interfaces;
 
 public interface IPartidaRepository
 {
-    Task<Partida?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<Partida?> ObtenerPorIdAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Partida>> ObtenerPorPersonajeAsync(int personajeId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default);
 
     Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default);
 

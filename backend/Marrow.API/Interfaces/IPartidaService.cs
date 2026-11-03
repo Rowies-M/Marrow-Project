@@ -1,14 +1,25 @@
-using Marrow.API.Models;
+using Marrow.API.DTOs;
 
 namespace Marrow.API.Interfaces;
 
 public interface IPartidaService
 {
-    Task<Partida?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<PartidaResponse?> CrearAsync(
+        int usuarioId,
+        CrearPartidaRequest request,
+        CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Partida>> ObtenerPorPersonajeAsync(int personajeId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PartidaResponse>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default);
 
-    Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default);
+    Task<PartidaResponse?> ObtenerPorIdAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default);
 
-    Task<Partida> ActualizarAsync(Partida partida, CancellationToken cancellationToken = default);
+    Task<PartidaResponse?> FinalizarAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default);
 }

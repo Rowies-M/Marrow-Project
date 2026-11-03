@@ -7,12 +7,20 @@ namespace Marrow.API.Repositories;
 
 public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
 {
-    public Task<Partida?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
+    public Task<Partida?> ObtenerPorIdAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default) =>
         context.Partidas.AsNoTracking().Include(partida => partida.Personaje)
-            .FirstOrDefaultAsync(partida => partida.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(
+                partida => partida.Id == id && partida.Personaje.UsuarioId == usuarioId,
+                cancellationToken);
 
-    public async Task<IReadOnlyList<Partida>> ObtenerPorPersonajeAsync(int personajeId, CancellationToken cancellationToken = default) =>
-        await context.Partidas.AsNoTracking().Where(partida => partida.PersonajeId == personajeId)
+    public async Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default) =>
+        await context.Partidas.AsNoTracking()
+            .Where(partida => partida.Personaje.UsuarioId == usuarioId)
             .OrderByDescending(partida => partida.FechaUltimaActualizacion).ToListAsync(cancellationToken);
 
     public async Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default)

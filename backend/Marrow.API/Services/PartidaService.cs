@@ -1,68 +1,99 @@
+using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
 
 namespace Marrow.API.Services;
 
-public class PartidaService(
+public sealed class PartidaService(
     IPartidaRepository partidaRepository,
     IPersonajeRepository personajeRepository) : IPartidaService
 {
-    public Task<Partida?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<PartidaResponse?> CrearAsync(
+        int usuarioId,
+        CrearPartidaRequest request,
+        CancellationToken cancellationToken = default)
     {
-        ValidarId(id);
-        return partidaRepository.ObtenerPorIdAsync(id, cancellationToken);
-    }
+        ValidarId(usuarioId, nameof(usuarioId));
+        ArgumentNullException.ThrowIfNull(request);
+        ValidarId(request.PersonajeId, nameof(request.PersonajeId));
 
-    public Task<IReadOnlyList<Partida>> ObtenerPorPersonajeAsync(int personajeId, CancellationToken cancellationToken = default)
-    {
-        ValidarId(personajeId, nameof(personajeId));
-        return partidaRepository.ObtenerPorPersonajeAsync(personajeId, cancellationToken);
-    }
+        var personaje = await personajeRepository.ObtenerPorIdAsync(
+            request.PersonajeId,
+            usuarioId,
+            cancellationToken);
 
-    public async Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default)
-    {
-        await ValidarPartidaAsync(partida, cancellationToken);
+        if (personaje is null)
+        {
+            return null;
+        }
 
         var ahora = DateTime.UtcNow;
-        partida.FechaCreacion = partida.FechaCreacion == default ? ahora : partida.FechaCreacion;
-        partida.FechaUltimaActualizacion = partida.FechaUltimaActualizacion == default
-            ? partida.FechaCreacion
-            : partida.FechaUltimaActualizacion;
+        var partida = new Partida
+        {
+            FechaCreacion = ahora,
+            FechaUltimaActualizacion = ahora,
+            Estado = EstadoPartida.Activa,
+            PersonajeId = personaje.Id
+        };
 
-        return await partidaRepository.CrearAsync(partida, cancellationToken);
+        var partidaCreada = await partidaRepository.CrearAsync(partida, cancellationToken);
+        return MapearRespuesta(partidaCreada);
     }
 
-    public async Task<Partida> ActualizarAsync(Partida partida, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<PartidaResponse>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default)
     {
-        await ValidarPartidaAsync(partida, cancellationToken);
-        ValidarId(partida.Id, nameof(partida.Id));
+        ValidarId(usuarioId, nameof(usuarioId));
+        var partidas = await partidaRepository.ObtenerPorUsuarioAsync(usuarioId, cancellationToken);
+        return partidas.Select(MapearRespuesta).ToList();
+    }
 
-        if (await partidaRepository.ObtenerPorIdAsync(partida.Id, cancellationToken) is null)
+    public async Task<PartidaResponse?> ObtenerPorIdAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(partidaId, nameof(partidaId));
+
+        var partida = await partidaRepository.ObtenerPorIdAsync(partidaId, usuarioId, cancellationToken);
+        return partida is null ? null : MapearRespuesta(partida);
+    }
+
+    public async Task<PartidaResponse?> FinalizarAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(partidaId, nameof(partidaId));
+
+        var partida = await partidaRepository.ObtenerPorIdAsync(partidaId, usuarioId, cancellationToken);
+        if (partida is null)
         {
-            throw new KeyNotFoundException("La partida no existe.");
+            return null;
         }
 
+        if (partida.Estado == EstadoPartida.Finalizada)
+        {
+            return MapearRespuesta(partida);
+        }
+
+        partida.Estado = EstadoPartida.Finalizada;
         partida.FechaUltimaActualizacion = DateTime.UtcNow;
-        return await partidaRepository.ActualizarAsync(partida, cancellationToken);
+        var partidaActualizada = await partidaRepository.ActualizarAsync(partida, cancellationToken);
+        return MapearRespuesta(partidaActualizada);
     }
 
-    private async Task ValidarPartidaAsync(Partida partida, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(partida);
-        ValidarId(partida.PersonajeId, nameof(partida.PersonajeId));
+    private static PartidaResponse MapearRespuesta(Partida partida) => new(
+        partida.Id,
+        new DateTimeOffset(DateTime.SpecifyKind(partida.FechaCreacion, DateTimeKind.Utc)),
+        new DateTimeOffset(DateTime.SpecifyKind(partida.FechaUltimaActualizacion, DateTimeKind.Utc)),
+        partida.Estado,
+        partida.PersonajeId);
 
-        if (!Enum.IsDefined(partida.Estado))
-        {
-            throw new ArgumentException("El estado de la partida no es válido.", nameof(partida));
-        }
-
-        if (await personajeRepository.ObtenerPorIdAsync(partida.PersonajeId, cancellationToken) is null)
-        {
-            throw new KeyNotFoundException("El personaje no existe.");
-        }
-    }
-
-    private static void ValidarId(int id, string parameterName = "id")
+    private static void ValidarId(int id, string parameterName)
     {
         if (id <= 0)
         {
