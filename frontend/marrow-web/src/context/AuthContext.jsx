@@ -3,6 +3,7 @@ import { loginUser, registerUser } from '../services/authService.js'
 import { AuthContext } from './AuthContext.js'
 
 const SESSION_STORAGE_KEY = 'marrow.auth.session'
+const ACTIVE_CHARACTER_STORAGE_KEY = 'marrow.active.character'
 
 function readStoredSession() {
   try {
@@ -42,6 +43,7 @@ export function AuthProvider({ children }) {
     },
     logout: () => {
       sessionStorage.removeItem(SESSION_STORAGE_KEY)
+      sessionStorage.removeItem(ACTIVE_CHARACTER_STORAGE_KEY)
       setSession(null)
     },
   }), [session])
