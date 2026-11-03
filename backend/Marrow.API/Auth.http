@@ -1,5 +1,6 @@
 @baseUrl = https://localhost:7199
 @password = {{$dotenv MARROW_TEST_PASSWORD}}
+@token = {{$dotenv MARROW_TEST_TOKEN}}
 
 ### Registrar usuario
 POST {{baseUrl}}/api/auth/register
@@ -19,6 +20,10 @@ Content-Type: application/json
   "usuario": "guerrero1",
   "password": "{{password}}"
 }
+
+### Ejemplo de petición autenticada para el próximo bloque
+GET {{baseUrl}}/api/enemigos
+Authorization: Bearer {{token}}
 
 ### Iniciar sesión con email
 POST {{baseUrl}}/api/auth/login

@@ -6,5 +6,5 @@ public interface IUsuarioService
 {
     Task<UsuarioResponse> RegistrarAsync(RegistroUsuarioRequest request, CancellationToken cancellationToken = default);
 
-    Task<UsuarioResponse?> AutenticarAsync(LoginUsuarioRequest request, CancellationToken cancellationToken = default);
+    Task<LoginUsuarioResponse?> AutenticarAsync(LoginUsuarioRequest request, CancellationToken cancellationToken = default);
 }

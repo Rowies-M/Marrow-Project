@@ -34,7 +34,7 @@ public class AuthController(IUsuarioService usuarioService) : ControllerBase
 
     /// <summary>Verifica las credenciales de un usuario.</summary>
     [HttpPost("login")]
-    [ProducesResponseType(typeof(UsuarioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(LoginUsuarioResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login(
         LoginUsuarioRequest request,

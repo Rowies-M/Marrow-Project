@@ -7,7 +7,8 @@ namespace Marrow.API.Services;
 
 public sealed class UsuarioService(
     IUsuarioRepository usuarioRepository,
-    IPasswordHasher<Usuario> passwordHasher) : IUsuarioService
+    IPasswordHasher<Usuario> passwordHasher,
+    IJwtTokenService jwtTokenService) : IUsuarioService
 {
     public async Task<UsuarioResponse> RegistrarAsync(
         RegistroUsuarioRequest request,
@@ -38,7 +39,7 @@ public sealed class UsuarioService(
         return MapearRespuesta(usuarioCreado);
     }
 
-    public async Task<UsuarioResponse?> AutenticarAsync(
+    public async Task<LoginUsuarioResponse?> AutenticarAsync(
         LoginUsuarioRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -54,7 +55,8 @@ public sealed class UsuarioService(
             return null;
         }
 
-        return MapearRespuesta(usuario);
+        var token = jwtTokenService.GenerarToken(usuario);
+        return new LoginUsuarioResponse(token.Token, token.ExpiraEn, MapearRespuesta(usuario));
     }
 
     private static UsuarioResponse MapearRespuesta(Usuario usuario) => new(
