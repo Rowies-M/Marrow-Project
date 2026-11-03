@@ -25,6 +25,46 @@ Content-Type: application/json
 GET {{baseUrl}}/api/enemigos
 Authorization: Bearer {{token}}
 
+### Crear personaje
+POST {{baseUrl}}/api/personajes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Arthas",
+  "nivel": 1,
+  "experiencia": 0,
+  "vidaActual": 100,
+  "vidaMaxima": 100,
+  "ataque": 10,
+  "defensa": 5,
+  "clase": 0
+}
+
+### Listar personajes propios
+GET {{baseUrl}}/api/personajes
+Authorization: Bearer {{token}}
+
+### Obtener personaje propio
+GET {{baseUrl}}/api/personajes/{{personajeId}}
+Authorization: Bearer {{token}}
+
+### Actualizar personaje propio
+PUT {{baseUrl}}/api/personajes/{{personajeId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Arthas",
+  "nivel": 2,
+  "experiencia": 25,
+  "vidaActual": 110,
+  "vidaMaxima": 110,
+  "ataque": 12,
+  "defensa": 6,
+  "clase": 0
+}
+
 ### Iniciar sesión con email
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json

@@ -1,78 +1,146 @@
+using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
 
 namespace Marrow.API.Services;
 
-public class PersonajeService(
+public sealed class PersonajeService(
     IPersonajeRepository personajeRepository,
     IUsuarioRepository usuarioRepository) : IPersonajeService
 {
-    public Task<Personaje?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)
-    {
-        ValidarId(id);
-        return personajeRepository.ObtenerPorIdAsync(id, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<Personaje>> ObtenerPorUsuarioAsync(int usuarioId, CancellationToken cancellationToken = default)
+    public async Task<PersonajeResponse> CrearAsync(
+        int usuarioId,
+        CrearPersonajeRequest request,
+        CancellationToken cancellationToken = default)
     {
         ValidarId(usuarioId, nameof(usuarioId));
-        return personajeRepository.ObtenerPorUsuarioAsync(usuarioId, cancellationToken);
-    }
+        ArgumentNullException.ThrowIfNull(request);
+        ValidarRequest(request);
+        await ValidarUsuarioAsync(usuarioId, cancellationToken);
 
-    public async Task<Personaje> CrearAsync(Personaje personaje, CancellationToken cancellationToken = default)
-    {
-        ValidarPersonaje(personaje);
-        await ValidarUsuarioAsync(personaje.UsuarioId, cancellationToken);
-        return await personajeRepository.CrearAsync(personaje, cancellationToken);
-    }
-
-    public async Task<Personaje> ActualizarAsync(Personaje personaje, CancellationToken cancellationToken = default)
-    {
-        ValidarPersonaje(personaje);
-        ValidarId(personaje.Id, nameof(personaje.Id));
-        await ValidarUsuarioAsync(personaje.UsuarioId, cancellationToken);
-
-        if (await personajeRepository.ObtenerPorIdAsync(personaje.Id, cancellationToken) is null)
+        var personaje = new Personaje
         {
-            throw new KeyNotFoundException("El personaje no existe.");
+            Nombre = request.Nombre.Trim(),
+            Nivel = request.Nivel,
+            Experiencia = request.Experiencia,
+            VidaActual = request.VidaActual,
+            VidaMaxima = request.VidaMaxima,
+            Ataque = request.Ataque,
+            Defensa = request.Defensa,
+            Clase = request.Clase,
+            UsuarioId = usuarioId
+        };
+
+        var personajeCreado = await personajeRepository.CrearAsync(personaje, cancellationToken);
+        return MapearRespuesta(personajeCreado);
+    }
+
+    public async Task<IReadOnlyList<PersonajeResponse>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        var personajes = await personajeRepository.ObtenerPorUsuarioAsync(usuarioId, cancellationToken);
+        return personajes.Select(MapearRespuesta).ToList();
+    }
+
+    public async Task<PersonajeResponse?> ObtenerPorIdAsync(
+        int usuarioId,
+        int personajeId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(personajeId, nameof(personajeId));
+
+        var personaje = await personajeRepository.ObtenerPorIdAsync(personajeId, usuarioId, cancellationToken);
+        return personaje is null ? null : MapearRespuesta(personaje);
+    }
+
+    public async Task<PersonajeResponse?> ActualizarAsync(
+        int usuarioId,
+        int personajeId,
+        ActualizarPersonajeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(personajeId, nameof(personajeId));
+        ArgumentNullException.ThrowIfNull(request);
+        ValidarRequest(request);
+
+        var personaje = await personajeRepository.ObtenerPorIdAsync(personajeId, usuarioId, cancellationToken);
+        if (personaje is null)
+        {
+            return null;
         }
 
-        return await personajeRepository.ActualizarAsync(personaje, cancellationToken);
+        personaje.Nombre = request.Nombre.Trim();
+        personaje.Nivel = request.Nivel;
+        personaje.Experiencia = request.Experiencia;
+        personaje.VidaActual = request.VidaActual;
+        personaje.VidaMaxima = request.VidaMaxima;
+        personaje.Ataque = request.Ataque;
+        personaje.Defensa = request.Defensa;
+        personaje.Clase = request.Clase;
+
+        var personajeActualizado = await personajeRepository.ActualizarAsync(personaje, cancellationToken);
+        return MapearRespuesta(personajeActualizado);
     }
 
     private async Task ValidarUsuarioAsync(int usuarioId, CancellationToken cancellationToken)
     {
-        ValidarId(usuarioId, nameof(usuarioId));
-
         if (await usuarioRepository.ObtenerPorIdAsync(usuarioId, cancellationToken) is null)
         {
             throw new KeyNotFoundException("El usuario no existe.");
         }
     }
 
-    private static void ValidarPersonaje(Personaje personaje)
+    private static PersonajeResponse MapearRespuesta(Personaje personaje) => new(
+        personaje.Id,
+        personaje.Nombre,
+        personaje.Nivel,
+        personaje.Experiencia,
+        personaje.VidaActual,
+        personaje.VidaMaxima,
+        personaje.Ataque,
+        personaje.Defensa,
+        personaje.Clase);
+
+    private static void ValidarRequest(CrearPersonajeRequest request) =>
+        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.VidaActual,
+            request.VidaMaxima, request.Ataque, request.Defensa, request.Clase);
+
+    private static void ValidarRequest(ActualizarPersonajeRequest request) =>
+        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.VidaActual,
+            request.VidaMaxima, request.Ataque, request.Defensa, request.Clase);
+
+    private static void ValidarDatos(
+        string nombre,
+        int nivel,
+        int experiencia,
+        int vidaActual,
+        int vidaMaxima,
+        int ataque,
+        int defensa,
+        ClasePersonaje clase)
     {
-        ArgumentNullException.ThrowIfNull(personaje);
-
-        if (string.IsNullOrWhiteSpace(personaje.Nombre))
+        if (string.IsNullOrWhiteSpace(nombre))
         {
-            throw new ArgumentException("El nombre del personaje es obligatorio.", nameof(personaje));
+            throw new ArgumentException("El nombre del personaje es obligatorio.", nameof(nombre));
         }
 
-        if (personaje.Nivel <= 0 || personaje.Experiencia < 0 || personaje.VidaActual < 0 ||
-            personaje.VidaMaxima < 0 || personaje.Ataque < 0 || personaje.Defensa < 0 ||
-            personaje.VidaActual > personaje.VidaMaxima)
+        if (nivel <= 0 || experiencia < 0 || vidaActual < 0 || vidaMaxima < 0 ||
+            ataque < 0 || defensa < 0 || vidaActual > vidaMaxima)
         {
-            throw new ArgumentException("Las estadísticas del personaje no son válidas.", nameof(personaje));
+            throw new ArgumentException("Las estadísticas del personaje no son válidas.");
         }
 
-        if (!Enum.IsDefined(personaje.Clase))
+        if (clase != ClasePersonaje.Guerrero)
         {
-            throw new ArgumentException("La clase del personaje no es válida.", nameof(personaje));
+            throw new ArgumentException("La única clase disponible es Guerrero.", nameof(clase));
         }
     }
 
-    private static void ValidarId(int id, string parameterName = "id")
+    private static void ValidarId(int id, string parameterName)
     {
         if (id <= 0)
         {

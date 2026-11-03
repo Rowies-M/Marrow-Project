@@ -11,6 +11,13 @@ public class PersonajeRepository(MarrowDbContext context) : IPersonajeRepository
         context.Personajes.AsNoTracking().Include(personaje => personaje.Usuario)
             .FirstOrDefaultAsync(personaje => personaje.Id == id, cancellationToken);
 
+    public Task<Personaje?> ObtenerPorIdAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default) =>
+        context.Personajes.AsNoTracking().Include(personaje => personaje.Usuario)
+            .FirstOrDefaultAsync(personaje => personaje.Id == id && personaje.UsuarioId == usuarioId, cancellationToken);
+
     public async Task<IReadOnlyList<Personaje>> ObtenerPorUsuarioAsync(int usuarioId, CancellationToken cancellationToken = default) =>
         await context.Personajes.AsNoTracking().Where(personaje => personaje.UsuarioId == usuarioId)
             .ToListAsync(cancellationToken);

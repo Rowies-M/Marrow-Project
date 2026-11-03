@@ -1,14 +1,26 @@
-using Marrow.API.Models;
+using Marrow.API.DTOs;
 
 namespace Marrow.API.Interfaces;
 
 public interface IPersonajeService
 {
-    Task<Personaje?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<PersonajeResponse> CrearAsync(
+        int usuarioId,
+        CrearPersonajeRequest request,
+        CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Personaje>> ObtenerPorUsuarioAsync(int usuarioId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PersonajeResponse>> ObtenerPorUsuarioAsync(
+        int usuarioId,
+        CancellationToken cancellationToken = default);
 
-    Task<Personaje> CrearAsync(Personaje personaje, CancellationToken cancellationToken = default);
+    Task<PersonajeResponse?> ObtenerPorIdAsync(
+        int usuarioId,
+        int personajeId,
+        CancellationToken cancellationToken = default);
 
-    Task<Personaje> ActualizarAsync(Personaje personaje, CancellationToken cancellationToken = default);
+    Task<PersonajeResponse?> ActualizarAsync(
+        int usuarioId,
+        int personajeId,
+        ActualizarPersonajeRequest request,
+        CancellationToken cancellationToken = default);
 }
