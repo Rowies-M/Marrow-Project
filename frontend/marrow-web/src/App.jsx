@@ -1,14 +1,15 @@
 import { useCallback, useState } from 'react'
 import { useAuth } from './context/useAuth.js'
 import CharacterSelectionPage from './pages/CharacterSelectionPage.jsx'
+import GamePage from './pages/GamePage.jsx'
 import PartidasPanel from './components/PartidasPanel.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 
 const ACTIVE_CHARACTER_STORAGE_KEY = 'marrow.active.character'
 
-function ActiveCharacterHome({ character, onBackToSelection }) {
-  const { token, user, logout } = useAuth()
+function ActiveCharacterHome({ character, onBackToSelection, onPartidaSelected, onLogout }) {
+  const { token, user } = useAuth()
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
@@ -22,10 +23,10 @@ function ActiveCharacterHome({ character, onBackToSelection }) {
           <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Vida</p><p className="mt-1 font-semibold text-white">{character.vidaActual}/{character.vidaMaxima}</p></div>
           <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Ataque</p><p className="mt-1 font-semibold text-white">{character.ataque}</p></div>
         </div>
-        <PartidasPanel token={token} personajeId={character.id} />
+        <PartidasPanel token={token} personajeId={character.id} onPartidaSelected={onPartidaSelected} />
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <button className="rounded-xl bg-violet-500 px-5 py-3 font-semibold text-white transition hover:bg-violet-400" type="button" onClick={onBackToSelection}>Volver a selección</button>
-          <button className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white" type="button" onClick={logout}>Cerrar sesión</button>
+          <button className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white" type="button" onClick={onLogout}>Cerrar sesión</button>
         </div>
       </section>
     </main>
@@ -33,10 +34,11 @@ function ActiveCharacterHome({ character, onBackToSelection }) {
 }
 
 function App() {
-  const { isAuthenticated, isRestoring, token, user } = useAuth()
+  const { isAuthenticated, isRestoring, token, user, logout } = useAuth()
   const [authMode, setAuthMode] = useState('login')
   const [registrationNotice, setRegistrationNotice] = useState('')
   const [activeCharacter, setActiveCharacter] = useState(null)
+  const [selectedPartida, setSelectedPartida] = useState(null)
   const userId = user?.id
 
   const handleCharacterSelected = useCallback((character) => {
@@ -45,12 +47,19 @@ function App() {
     }
 
     setActiveCharacter({ userId, character })
+    setSelectedPartida(null)
   }, [userId])
 
   const handleBackToSelection = useCallback(() => {
     sessionStorage.removeItem(ACTIVE_CHARACTER_STORAGE_KEY)
     setActiveCharacter(null)
+    setSelectedPartida(null)
   }, [])
+
+  const handleLogout = useCallback(() => {
+    setSelectedPartida(null)
+    logout()
+  }, [logout])
 
   if (isRestoring) {
     return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">Restaurando sesión...</main>
@@ -60,7 +69,11 @@ function App() {
     const selectedCharacter = activeCharacter?.userId === user.id ? activeCharacter.character : null
 
     if (selectedCharacter) {
-      return <ActiveCharacterHome character={selectedCharacter} onBackToSelection={handleBackToSelection} />
+      if (selectedPartida) {
+        return <GamePage partida={selectedPartida} personaje={selectedCharacter} onBackToPartidas={() => setSelectedPartida(null)} />
+      }
+
+      return <ActiveCharacterHome character={selectedCharacter} onBackToSelection={handleBackToSelection} onPartidaSelected={setSelectedPartida} onLogout={handleLogout} />
     }
 
     return <CharacterSelectionPage token={token} user={user} activeCharacter={selectedCharacter} onCharacterSelected={handleCharacterSelected} />

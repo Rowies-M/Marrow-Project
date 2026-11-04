@@ -13,7 +13,7 @@ function getEstadoLabel(estado) {
   return estado === 0 ? 'Activa' : 'Finalizada'
 }
 
-export default function PartidasPanel({ token, personajeId }) {
+export default function PartidasPanel({ token, personajeId, onPartidaSelected }) {
   const [partidas, setPartidas] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
@@ -129,14 +129,24 @@ export default function PartidasPanel({ token, personajeId }) {
                     </div>
                   </div>
                   {isActive && (
-                    <button
-                      className="rounded-xl border border-rose-400/40 px-4 py-2 font-semibold text-rose-200 transition hover:border-rose-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      type="button"
-                      onClick={() => handleFinalize(partida.id)}
-                      disabled={isFinalizing || isCreating}
-                    >
-                      {isFinalizing ? 'Finalizando...' : 'Finalizar'}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        onClick={() => onPartidaSelected(partida)}
+                        disabled={isFinalizing || isCreating}
+                      >
+                        Jugar
+                      </button>
+                      <button
+                        className="rounded-xl border border-rose-400/40 px-4 py-2 font-semibold text-rose-200 transition hover:border-rose-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        onClick={() => handleFinalize(partida.id)}
+                        disabled={isFinalizing || isCreating}
+                      >
+                        {isFinalizing ? 'Finalizando...' : 'Finalizar'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </article>
