@@ -9,6 +9,11 @@ public interface IPartidaRepository
         int usuarioId,
         CancellationToken cancellationToken = default);
 
+    Task<Partida?> ObtenerEstadoAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
         int usuarioId,
         CancellationToken cancellationToken = default);

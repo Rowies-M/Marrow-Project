@@ -18,6 +18,11 @@ public interface IPartidaService
         int partidaId,
         CancellationToken cancellationToken = default);
 
+    Task<EstadoPartidaResponse?> ObtenerEstadoAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default);
+
     Task<PartidaResponse?> FinalizarAsync(
         int usuarioId,
         int partidaId,

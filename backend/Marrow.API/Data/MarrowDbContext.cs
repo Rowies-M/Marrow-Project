@@ -63,5 +63,11 @@ public class MarrowDbContext(DbContextOptions<MarrowDbContext> options) : DbCont
             .HasOne(partida => partida.Personaje)
             .WithMany()
             .HasForeignKey(partida => partida.PersonajeId);
+
+        modelBuilder.Entity<Partida>()
+            .HasOne(partida => partida.Enemigo)
+            .WithMany()
+            .HasForeignKey(partida => partida.EnemigoId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

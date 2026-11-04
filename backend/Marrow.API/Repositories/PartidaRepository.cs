@@ -16,6 +16,17 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
                 partida => partida.Id == id && partida.Personaje.UsuarioId == usuarioId,
                 cancellationToken);
 
+    public Task<Partida?> ObtenerEstadoAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default) =>
+        context.Partidas.AsNoTracking()
+            .Include(partida => partida.Personaje)
+            .Include(partida => partida.Enemigo)
+            .FirstOrDefaultAsync(
+                partida => partida.Id == id && partida.Personaje.UsuarioId == usuarioId,
+                cancellationToken);
+
     public async Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
         int usuarioId,
         CancellationToken cancellationToken = default) =>

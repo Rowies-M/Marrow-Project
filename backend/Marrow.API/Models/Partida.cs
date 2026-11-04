@@ -13,4 +13,20 @@ public class Partida
     public int PersonajeId { get; set; }
 
     public Personaje Personaje { get; set; } = null!;
+
+    public int EnemigoId { get; set; }
+
+    public Enemigo Enemigo { get; set; } = null!;
+
+    public int VidaPersonajeActual { get; set; }
+
+    public int VidaEnemigoActual { get; set; }
+
+    public int PersonajeX { get; set; }
+
+    public int PersonajeY { get; set; }
+
+    public int EnemigoX { get; set; }
+
+    public int EnemigoY { get; set; }
 }

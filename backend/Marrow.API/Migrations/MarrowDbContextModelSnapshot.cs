@@ -94,6 +94,15 @@ namespace Marrow.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("EnemigoId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EnemigoX")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EnemigoY")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Estado")
                         .HasColumnType("integer");
 
@@ -106,7 +115,21 @@ namespace Marrow.API.Migrations
                     b.Property<int>("PersonajeId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PersonajeX")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PersonajeY")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VidaEnemigoActual")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VidaPersonajeActual")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("EnemigoId");
 
                     b.HasIndex("PersonajeId");
 
@@ -186,11 +209,19 @@ namespace Marrow.API.Migrations
 
             modelBuilder.Entity("Marrow.API.Models.Partida", b =>
                 {
+                    b.HasOne("Marrow.API.Models.Enemigo", "Enemigo")
+                        .WithMany()
+                        .HasForeignKey("EnemigoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Marrow.API.Models.Personaje", "Personaje")
                         .WithMany()
                         .HasForeignKey("PersonajeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Enemigo");
 
                     b.Navigation("Personaje");
                 });

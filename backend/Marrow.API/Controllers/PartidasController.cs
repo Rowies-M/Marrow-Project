@@ -61,6 +61,22 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
         return partida is null ? NotFound() : Ok(partida);
     }
 
+    /// <summary>Obtiene el estado de juego de una partida propia.</summary>
+    [HttpGet("{id:int}/estado")]
+    [ProducesResponseType(typeof(EstadoPartidaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerEstado(int id, CancellationToken cancellationToken)
+    {
+        if (!TryObtenerUsuarioId(out var usuarioId))
+        {
+            return Unauthorized();
+        }
+
+        var estado = await partidaService.ObtenerEstadoAsync(usuarioId, id, cancellationToken);
+        return estado is null ? NotFound() : Ok(estado);
+    }
+
     /// <summary>Finaliza una partida propia.</summary>
     [HttpPatch("{id:int}/finalizar")]
     [ProducesResponseType(typeof(PartidaResponse), StatusCodes.Status200OK)]
