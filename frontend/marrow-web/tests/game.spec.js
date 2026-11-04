@@ -31,6 +31,27 @@ const activePartida = {
 
 const finalizedPartida = { ...activePartida, id: 18, estado: 1 }
 
+const gameState = {
+  partidaId: activePartida.id,
+  fechaCreacion: activePartida.fechaCreacion,
+  fechaUltimaActualizacion: activePartida.fechaUltimaActualizacion,
+  estado: activePartida.estado,
+  personajeId: character.id,
+  personajeNombre: character.nombre,
+  personajeNivel: character.nivel,
+  vidaPersonajeActual: 84,
+  vidaPersonajeMaxima: character.vidaMaxima,
+  personajeX: 1,
+  personajeY: 1,
+  enemigoId: 1,
+  enemigoNombre: 'Goblin',
+  enemigoNivel: 1,
+  vidaEnemigoActual: 30,
+  vidaEnemigoMaxima: 30,
+  enemigoX: 5,
+  enemigoY: 3,
+}
+
 async function preparePage(page, partidas) {
   await page.addInitScript((storedSession) => {
     sessionStorage.setItem('marrow.auth.session', JSON.stringify(storedSession))
@@ -42,6 +63,10 @@ async function preparePage(page, partidas) {
 
   await page.route('**/api/partidas', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(partidas) })
+  })
+
+  await page.route(`**/api/partidas/${activePartida.id}/estado`, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gameState) })
   })
 
   await page.goto('/')
@@ -56,9 +81,10 @@ test.describe('Pantalla de juego', () => {
     await page.getByRole('button', { name: 'Jugar' }).click()
 
     await expect(page.getByRole('heading', { name: 'La entrada a la mazmorra' })).toBeVisible()
-    await expect(page.getByLabel('Guerrero Bruma')).toBeVisible()
-    await expect(page.getByLabel('Goblin')).toBeVisible()
-    await expect(page.getByRole('region', { name: 'HUD del Guerrero' })).toContainText('Vida: 100/100')
+    await expect(page.getByLabel('Guerrero Bruma', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Goblin', { exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Vida: 84/100')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Vida: 30/30')
   })
 
   test('regresa al panel de partidas', async ({ page }) => {
@@ -76,5 +102,29 @@ test.describe('Pantalla de juego', () => {
 
     await expect(page.getByText('Finalizada')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Jugar' })).toHaveCount(0)
+  })
+
+  test('muestra un error y no conserva datos si falla la carga del estado', async ({ page }) => {
+    await page.addInitScript((storedSession) => {
+      sessionStorage.setItem('marrow.auth.session', JSON.stringify(storedSession))
+    }, session)
+
+    await page.route('**/api/personajes', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([character]) })
+    })
+    await page.route('**/api/partidas', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([activePartida]) })
+    })
+    await page.route(`**/api/partidas/${activePartida.id}/estado`, async (route) => {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'La partida no existe.' }) })
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /Bruma/ }).click()
+    await page.getByRole('button', { name: 'Jugar' }).click()
+
+    await expect(page.getByRole('alert')).toContainText('La partida no existe.')
+    await expect(page.getByLabel('Escenario de juego')).toHaveCount(0)
+    await expect(page.getByText('Vida: 84/100')).toHaveCount(0)
   })
 })

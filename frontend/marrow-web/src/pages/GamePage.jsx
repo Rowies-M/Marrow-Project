@@ -1,7 +1,46 @@
+import { useEffect, useState } from 'react'
+import { useAuth } from '../context/useAuth.js'
+import FormMessage from '../components/FormMessage.jsx'
 import GameHud from '../components/GameHud.jsx'
 import GameScene from '../components/GameScene.jsx'
+import { getPartidaEstado } from '../services/partidaService.js'
 
 export default function GamePage({ partida, personaje, onBackToPartidas }) {
+  const { token } = useAuth()
+  const [gameState, setGameState] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadGameState() {
+      setGameState(null)
+      setError('')
+      setIsLoading(true)
+
+      try {
+        const response = await getPartidaEstado(token, partida.id)
+        if (!cancelled) {
+          setGameState(response)
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(requestError.message)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadGameState()
+    return () => { cancelled = true }
+  }, [partida.id, token])
+
+  const characterName = gameState?.personajeNombre || personaje.nombre
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 sm:px-8">
       <section className="mx-auto max-w-6xl">
@@ -9,21 +48,32 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-violet-300">Marrow · Partida #{partida.id}</p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight text-white">La entrada a la mazmorra</h1>
-            <p className="mt-2 text-slate-400">{personaje.nombre} se prepara para avanzar.</p>
+            <p className="mt-2 text-slate-400">{characterName} se prepara para avanzar.</p>
           </div>
           <button className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white" type="button" onClick={onBackToPartidas}>Volver a partidas</button>
         </header>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <GameScene characterName={personaje.nombre} />
-          <aside className="space-y-6">
-            <GameHud character={personaje} />
-            <section className="rounded-2xl border border-rose-400/20 bg-slate-900 p-5" aria-label="Información del enemigo">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-300">Enemigo visible</p>
-              <h2 className="mt-2 text-2xl font-bold text-white">Goblin</h2>
-              <p className="mt-2 text-sm text-slate-400">Enemigo inicial del escenario. El combate se habilitará en un bloque posterior.</p>
-            </section>
-          </aside>
+        <div className="mt-6">
+          {isLoading && <p className="rounded-xl bg-slate-900 p-4 text-sm text-slate-400" role="status">Cargando el estado de la partida...</p>}
+          <FormMessage>{error}</FormMessage>
+          {!isLoading && !error && gameState && (
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+              <GameScene
+                characterName={gameState.personajeNombre}
+                enemyName={gameState.enemigoNombre}
+                characterPosition={{ x: gameState.personajeX, y: gameState.personajeY }}
+                enemyPosition={{ x: gameState.enemigoX, y: gameState.enemigoY }}
+              />
+              <aside className="space-y-6">
+                <GameHud
+                  characterName={gameState.personajeNombre}
+                  characterHealth={{ current: gameState.vidaPersonajeActual, maximum: gameState.vidaPersonajeMaxima }}
+                  enemyName={gameState.enemigoNombre}
+                  enemyHealth={{ current: gameState.vidaEnemigoActual, maximum: gameState.vidaEnemigoMaxima }}
+                />
+              </aside>
+            </div>
+          )}
         </div>
       </section>
     </main>

@@ -16,6 +16,10 @@ export function getPartidaById(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}`, { token })
 }
 
+export function getPartidaEstado(token, partidaId) {
+  return apiRequest(`/api/partidas/${partidaId}/estado`, { token })
+}
+
 export function finalizePartida(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}/finalizar`, {
     method: 'PATCH',
