@@ -108,20 +108,23 @@ public sealed class PersonajeService(
         personaje.Clase);
 
     private static void ValidarRequest(CrearPersonajeRequest request) =>
-        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.VidaActual,
-            request.VidaMaxima, request.Ataque, request.Defensa, request.Clase);
+        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.Defensa, request.Clase);
 
-    private static void ValidarRequest(ActualizarPersonajeRequest request) =>
-        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.VidaActual,
-            request.VidaMaxima, request.Ataque, request.Defensa, request.Clase);
+    private static void ValidarRequest(ActualizarPersonajeRequest request)
+    {
+        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.Defensa, request.Clase);
+
+        if (request.VidaActual < 0 || request.VidaMaxima < 0 || request.Ataque < 0 ||
+            request.VidaActual > request.VidaMaxima)
+        {
+            throw new ArgumentException("Las estadísticas del personaje no son válidas.");
+        }
+    }
 
     private static void ValidarDatos(
         string nombre,
         int nivel,
         int experiencia,
-        int vidaActual,
-        int vidaMaxima,
-        int ataque,
         int defensa,
         ClasePersonaje clase)
     {
@@ -130,8 +133,7 @@ public sealed class PersonajeService(
             throw new ArgumentException("El nombre del personaje es obligatorio.", nameof(nombre));
         }
 
-        if (nivel <= 0 || experiencia < 0 || vidaActual < 0 || vidaMaxima < 0 ||
-            ataque < 0 || defensa < 0 || vidaActual > vidaMaxima)
+        if (nivel <= 0 || experiencia < 0 || defensa < 0)
         {
             throw new ArgumentException("Las estadísticas del personaje no son válidas.");
         }

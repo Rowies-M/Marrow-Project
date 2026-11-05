@@ -102,10 +102,13 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
 
         if (resultado.ConcurrenciaPerdida)
         {
+            var partidaActiva = resultado.Estado.Estado == Models.EstadoPartida.Activa;
             return Conflict(new ProblemDetails
             {
-                Title = "La partida no está activa.",
-                Detail = "No se puede mover el personaje porque la partida ya fue finalizada."
+                Title = partidaActiva ? "Movimiento no permitido." : "La partida no está activa.",
+                Detail = partidaActiva
+                    ? "La casilla está ocupada por el enemigo."
+                    : "No se puede mover el personaje porque la partida ya fue finalizada."
             });
         }
 

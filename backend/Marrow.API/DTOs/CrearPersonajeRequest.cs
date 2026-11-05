@@ -18,18 +18,6 @@ public sealed record CrearPersonajeRequest
     [Range(0, int.MaxValue)]
     public int Experiencia { get; init; }
 
-    /// <summary>Vida actual del personaje.</summary>
-    [Range(0, int.MaxValue)]
-    public int VidaActual { get; init; }
-
-    /// <summary>Vida máxima del personaje.</summary>
-    [Range(0, int.MaxValue)]
-    public int VidaMaxima { get; init; }
-
-    /// <summary>Ataque del personaje.</summary>
-    [Range(0, int.MaxValue)]
-    public int Ataque { get; init; }
-
     /// <summary>Defensa del personaje.</summary>
     [Range(0, int.MaxValue)]
     public int Defensa { get; init; }

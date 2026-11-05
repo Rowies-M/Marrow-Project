@@ -50,7 +50,9 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
         context.Partidas
             .Where(partida => partida.Id == id
                 && partida.Personaje.UsuarioId == usuarioId
-                && partida.Estado == EstadoPartida.Activa)
+                && partida.Estado == EstadoPartida.Activa
+                && !(partida.PersonajeX + deltaX == partida.EnemigoX
+                    && partida.PersonajeY + deltaY == partida.EnemigoY))
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(
                     partida => partida.PersonajeX,

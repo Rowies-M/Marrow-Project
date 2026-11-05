@@ -37,6 +37,7 @@ public sealed class PartidaService(
         var enemigo = await enemigoRepository.ObtenerPorIdAsync(EnemigoInicialId, cancellationToken)
             ?? throw new InvalidOperationException("El enemigo inicial no existe.");
 
+        var estadisticas = ReglasCombate.ObtenerEstadisticas(personaje.DificultadDesbloqueada);
         var ahora = DateTime.UtcNow;
         var partida = new Partida
         {
@@ -46,8 +47,8 @@ public sealed class PartidaService(
             Dificultad = personaje.DificultadDesbloqueada,
             PersonajeId = personaje.Id,
             EnemigoId = enemigo.Id,
-            VidaPersonajeActual = personaje.VidaActual,
-            VidaEnemigoActual = enemigo.VidaMaxima,
+            VidaPersonajeActual = estadisticas.VidaJugador,
+            VidaEnemigoActual = estadisticas.VidaEnemigo,
             PersonajeX = PersonajeXInicial,
             PersonajeY = PersonajeYInicial,
             EnemigoX = EnemigoXInicial,
@@ -166,16 +167,18 @@ public sealed class PartidaService(
         partida.Personaje.Nombre,
         partida.Personaje.Nivel,
         partida.VidaPersonajeActual,
-        partida.Personaje.VidaMaxima,
+        ReglasCombate.ObtenerEstadisticas(partida.Dificultad).VidaJugador,
         partida.PersonajeX,
         partida.PersonajeY,
         partida.EnemigoId,
         partida.Enemigo.Nombre,
         partida.Enemigo.Nivel,
         partida.VidaEnemigoActual,
-        partida.Enemigo.VidaMaxima,
+        ReglasCombate.ObtenerEstadisticas(partida.Dificultad).VidaEnemigo,
         partida.EnemigoX,
-        partida.EnemigoY);
+        partida.EnemigoY,
+        partida.Dificultad,
+        partida.ResultadoCombate);
 
     private static void ValidarId(int id, string parameterName)
     {

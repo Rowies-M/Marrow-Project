@@ -21,4 +21,6 @@ public sealed record EstadoPartidaResponse(
     int VidaEnemigoActual,
     int VidaEnemigoMaxima,
     int EnemigoX,
-    int EnemigoY);
+    int EnemigoY,
+    Dificultad Dificultad,
+    ResultadoCombate? ResultadoCombate);
