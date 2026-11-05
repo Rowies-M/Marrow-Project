@@ -31,4 +31,13 @@ public interface IPartidaRepository
         int id,
         int usuarioId,
         CancellationToken cancellationToken = default);
+
+    Task<int> AplicarAtaqueAsync(
+        Partida leida,
+        int usuarioId,
+        int vidaPersonaje,
+        int vidaEnemigo,
+        ResultadoCombate? resultado,
+        bool desbloquearDificil,
+        CancellationToken cancellationToken = default);
 }

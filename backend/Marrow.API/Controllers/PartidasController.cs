@@ -146,6 +146,47 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
         return Ok(resultado.Partida);
     }
 
+    /// <summary>Ataca al enemigo adyacente en una partida propia.</summary>
+    [HttpPost("{id:int:min(1)}/ataque")]
+    [ProducesResponseType(typeof(AtaquePartidaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Atacar(int id, CancellationToken cancellationToken)
+    {
+        if (!TryObtenerUsuarioId(out var usuarioId))
+        {
+            return Unauthorized();
+        }
+
+        var resultado = await partidaService.AtacarAsync(usuarioId, id, cancellationToken);
+        if (resultado is null)
+        {
+            return NotFound();
+        }
+
+        return resultado switch
+        {
+            { Respuesta: not null, Rechazo: null } => Ok(resultado.Respuesta),
+            { Respuesta: null, Rechazo: RechazoAtaque.PartidaNoActiva } => Conflict(new ProblemDetails
+            {
+                Title = "La partida no está activa.",
+                Detail = "No se puede atacar porque la partida ya fue finalizada."
+            }),
+            { Respuesta: null, Rechazo: RechazoAtaque.FueraDeAlcance } => Conflict(new ProblemDetails
+            {
+                Title = "Ataque no permitido.",
+                Detail = "El enemigo está fuera de alcance."
+            }),
+            { Respuesta: null, Rechazo: RechazoAtaque.EstadoObsoleto } => Conflict(new ProblemDetails
+            {
+                Title = "La partida cambió.",
+                Detail = "La partida cambió mientras se procesaba el ataque. Volvé a intentarlo."
+            }),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
+
     private bool TryObtenerUsuarioId(out int usuarioId)
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);

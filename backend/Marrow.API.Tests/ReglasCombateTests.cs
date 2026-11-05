@@ -189,6 +189,22 @@ public class ReglasCombateTests
     }
 
     [Theory]
+    [InlineData(Dificultad.Normal, ResultadoCombate.Victoria, true)]
+    [InlineData(Dificultad.Normal, ResultadoCombate.Derrota, false)]
+    [InlineData(Dificultad.Dificil, ResultadoCombate.Victoria, false)]
+    [InlineData(Dificultad.Dificil, ResultadoCombate.Derrota, false)]
+    [InlineData((Dificultad)99, ResultadoCombate.Victoria, false)]
+    [InlineData(Dificultad.Normal, (ResultadoCombate)99, false)]
+    [InlineData(Dificultad.Normal, (ResultadoCombate)0, false)]
+    public void DesbloqueaDificil_SoloConVictoriaEnNormal(
+        Dificultad dificultad,
+        ResultadoCombate resultado,
+        bool esperado)
+    {
+        Assert.Equal(esperado, ReglasCombate.DesbloqueaDificil(dificultad, resultado));
+    }
+
+    [Theory]
     [InlineData(Dificultad.Normal, 3, 60)]
     [InlineData(Dificultad.Dificil, 6, 5)]
     public void CombateCompleto_DesdeLaVidaInicial_TerminaEnVictoriaConLosValoresEsperados(

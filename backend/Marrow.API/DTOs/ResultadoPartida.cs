@@ -9,3 +9,14 @@ public sealed record MovimientoPartidaResult(
 public sealed record FinalizacionPartidaResult(
     PartidaResponse Partida,
     bool ConcurrenciaPerdida);
+
+public enum RechazoAtaque
+{
+    PartidaNoActiva,
+    FueraDeAlcance,
+    EstadoObsoleto
+}
+
+public sealed record AtaquePartidaResult(
+    AtaquePartidaResponse? Respuesta,
+    RechazoAtaque? Rechazo);

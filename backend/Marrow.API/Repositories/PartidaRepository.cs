@@ -82,4 +82,51 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
                 .SetProperty(partida => partida.Estado, EstadoPartida.Finalizada)
                 .SetProperty(partida => partida.FechaUltimaActualizacion, _ => DateTime.UtcNow),
                 cancellationToken);
+
+    public async Task<int> AplicarAtaqueAsync(
+        Partida leida,
+        int usuarioId,
+        int vidaPersonaje,
+        int vidaEnemigo,
+        ResultadoCombate? resultado,
+        bool desbloquearDificil,
+        CancellationToken cancellationToken = default)
+    {
+        var estado = resultado is null ? EstadoPartida.Activa : EstadoPartida.Finalizada;
+
+        await using var transaccion = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        var filasActualizadas = await context.Partidas
+            .Where(partida => partida.Id == leida.Id
+                && partida.Personaje.UsuarioId == usuarioId
+                && partida.Estado == EstadoPartida.Activa
+                && partida.Dificultad == leida.Dificultad
+                && partida.VidaPersonajeActual == leida.VidaPersonajeActual
+                && partida.VidaEnemigoActual == leida.VidaEnemigoActual
+                && partida.PersonajeX == leida.PersonajeX
+                && partida.PersonajeY == leida.PersonajeY
+                && partida.EnemigoX == leida.EnemigoX
+                && partida.EnemigoY == leida.EnemigoY)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(partida => partida.VidaPersonajeActual, vidaPersonaje)
+                .SetProperty(partida => partida.VidaEnemigoActual, vidaEnemigo)
+                .SetProperty(partida => partida.Estado, estado)
+                .SetProperty(partida => partida.ResultadoCombate, resultado)
+                .SetProperty(partida => partida.FechaUltimaActualizacion, _ => DateTime.UtcNow),
+                cancellationToken);
+
+        if (filasActualizadas > 0 && desbloquearDificil)
+        {
+            await context.Personajes
+                .Where(personaje => personaje.Id == leida.PersonajeId
+                    && personaje.UsuarioId == usuarioId
+                    && personaje.DificultadDesbloqueada == Dificultad.Normal)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(personaje => personaje.DificultadDesbloqueada, Dificultad.Dificil),
+                    cancellationToken);
+        }
+
+        await transaccion.CommitAsync(cancellationToken);
+        return filasActualizadas;
+    }
 }

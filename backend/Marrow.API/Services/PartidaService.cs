@@ -151,6 +151,72 @@ public sealed class PartidaService(
         return new FinalizacionPartidaResult(MapearRespuesta(partida), filasActualizadas == 0);
     }
 
+    public async Task<AtaquePartidaResult?> AtacarAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(partidaId, nameof(partidaId));
+
+        var leida = await partidaRepository.ObtenerEstadoAsync(partidaId, usuarioId, cancellationToken);
+        if (leida is null)
+        {
+            return null;
+        }
+
+        var rechazo = ClasificarRechazo(leida);
+        if (rechazo is not null)
+        {
+            return new AtaquePartidaResult(null, rechazo);
+        }
+
+        var resolucion = ReglasCombate.ResolverAtaque(
+            leida.Dificultad,
+            leida.VidaPersonajeActual,
+            leida.VidaEnemigoActual);
+        var desbloquearDificil = resolucion.Resultado is { } resultado
+            && ReglasCombate.DesbloqueaDificil(leida.Dificultad, resultado);
+
+        var filasActualizadas = await partidaRepository.AplicarAtaqueAsync(
+            leida,
+            usuarioId,
+            resolucion.VidaJugador,
+            resolucion.VidaEnemigo,
+            resolucion.Resultado,
+            desbloquearDificil,
+            cancellationToken);
+        var actual = await partidaRepository.ObtenerEstadoAsync(partidaId, usuarioId, cancellationToken);
+
+        if (filasActualizadas == 0)
+        {
+            return actual is null
+                ? null
+                : new AtaquePartidaResult(null, ClasificarRechazo(actual) ?? RechazoAtaque.EstadoObsoleto);
+        }
+
+        if (actual is null)
+        {
+            throw new InvalidOperationException("La partida atacada no se pudo leer después de actualizarla.");
+        }
+
+        return new AtaquePartidaResult(
+            new AtaquePartidaResponse(MapearEstado(actual), resolucion.DanioInfligido, resolucion.DanioRecibido),
+            null);
+    }
+
+    private static RechazoAtaque? ClasificarRechazo(Partida partida)
+    {
+        if (partida.Estado != EstadoPartida.Activa)
+        {
+            return RechazoAtaque.PartidaNoActiva;
+        }
+
+        return ReglasCombate.EsAdyacente(partida.PersonajeX, partida.PersonajeY, partida.EnemigoX, partida.EnemigoY)
+            ? null
+            : RechazoAtaque.FueraDeAlcance;
+    }
+
     private static PartidaResponse MapearRespuesta(Partida partida) => new(
         partida.Id,
         new DateTimeOffset(DateTime.SpecifyKind(partida.FechaCreacion, DateTimeKind.Utc)),

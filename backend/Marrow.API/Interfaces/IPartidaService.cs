@@ -33,4 +33,9 @@ public interface IPartidaService
         int usuarioId,
         int partidaId,
         CancellationToken cancellationToken = default);
+
+    Task<AtaquePartidaResult?> AtacarAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default);
 }

@@ -32,6 +32,9 @@ public static class ReglasCombate
     public static bool EsAdyacente(int jugadorX, int jugadorY, int enemigoX, int enemigoY) =>
         Math.Abs(jugadorX - enemigoX) + Math.Abs(jugadorY - enemigoY) == 1;
 
+    public static bool DesbloqueaDificil(Dificultad dificultad, ResultadoCombate resultado) =>
+        dificultad == Dificultad.Normal && resultado == ResultadoCombate.Victoria;
+
     public static ResolucionAtaque ResolverAtaque(Dificultad dificultad, int vidaJugador, int vidaEnemigo)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(vidaJugador);
