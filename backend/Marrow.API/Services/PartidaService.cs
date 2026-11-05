@@ -90,7 +90,43 @@ public sealed class PartidaService(
         return partida is null ? null : MapearEstado(partida);
     }
 
-    public async Task<PartidaResponse?> FinalizarAsync(
+    public async Task<MovimientoPartidaResult?> MoverAsync(
+        int usuarioId,
+        int partidaId,
+        MoverPartidaRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(partidaId, nameof(partidaId));
+        ArgumentNullException.ThrowIfNull(request);
+
+        var (deltaX, deltaY) = request.Direccion switch
+        {
+            "arriba" => (0, -1),
+            "abajo" => (0, 1),
+            "izquierda" => (-1, 0),
+            "derecha" => (1, 0),
+            _ => throw new ArgumentException("La dirección no es válida.", nameof(request))
+        };
+
+        var filasActualizadas = await partidaRepository.MoverAsync(
+            partidaId,
+            usuarioId,
+            deltaX,
+            deltaY,
+            cancellationToken);
+        var partida = await partidaRepository.ObtenerEstadoAsync(partidaId, usuarioId, cancellationToken);
+        if (partida is null)
+        {
+            return filasActualizadas == 0
+                ? null
+                : throw new InvalidOperationException("La partida movida no se pudo leer después de actualizarla.");
+        }
+
+        return new MovimientoPartidaResult(MapearEstado(partida), filasActualizadas == 0);
+    }
+
+    public async Task<FinalizacionPartidaResult?> FinalizarAsync(
         int usuarioId,
         int partidaId,
         CancellationToken cancellationToken = default)
@@ -98,21 +134,19 @@ public sealed class PartidaService(
         ValidarId(usuarioId, nameof(usuarioId));
         ValidarId(partidaId, nameof(partidaId));
 
+        var filasActualizadas = await partidaRepository.FinalizarAsync(
+            partidaId,
+            usuarioId,
+            cancellationToken);
         var partida = await partidaRepository.ObtenerPorIdAsync(partidaId, usuarioId, cancellationToken);
         if (partida is null)
         {
-            return null;
+            return filasActualizadas == 0
+                ? null
+                : throw new InvalidOperationException("La partida finalizada no se pudo leer después de actualizarla.");
         }
 
-        if (partida.Estado == EstadoPartida.Finalizada)
-        {
-            return MapearRespuesta(partida);
-        }
-
-        partida.Estado = EstadoPartida.Finalizada;
-        partida.FechaUltimaActualizacion = DateTime.UtcNow;
-        var partidaActualizada = await partidaRepository.ActualizarAsync(partida, cancellationToken);
-        return MapearRespuesta(partidaActualizada);
+        return new FinalizacionPartidaResult(MapearRespuesta(partida), filasActualizadas == 0);
     }
 
     private static PartidaResponse MapearRespuesta(Partida partida) => new(

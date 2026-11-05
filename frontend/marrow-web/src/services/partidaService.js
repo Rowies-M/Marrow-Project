@@ -20,6 +20,14 @@ export function getPartidaEstado(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}/estado`, { token })
 }
 
+export function movePartida(token, partidaId, direccion) {
+  return apiRequest(`/api/partidas/${partidaId}/movimiento`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify({ direccion }),
+  })
+}
+
 export function finalizePartida(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}/finalizar`, {
     method: 'PATCH',

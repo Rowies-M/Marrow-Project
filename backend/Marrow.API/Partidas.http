@@ -1,0 +1,30 @@
+@baseUrl = http://localhost:5137
+@token = reemplazar-con-un-token-jwt
+@partidaId = 1
+
+### Mover el personaje una casilla a la derecha
+PATCH {{baseUrl}}/api/partidas/{{partidaId}}/movimiento
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "direccion": "derecha"
+}
+
+### Dirección inválida: devuelve 400 Bad Request
+PATCH {{baseUrl}}/api/partidas/{{partidaId}}/movimiento
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "direccion": "diagonal"
+}
+
+### Partida inexistente: devuelve 404 Not Found
+PATCH {{baseUrl}}/api/partidas/999999/movimiento
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "direccion": "arriba"
+}

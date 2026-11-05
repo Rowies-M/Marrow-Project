@@ -23,7 +23,13 @@ public interface IPartidaService
         int partidaId,
         CancellationToken cancellationToken = default);
 
-    Task<PartidaResponse?> FinalizarAsync(
+    Task<MovimientoPartidaResult?> MoverAsync(
+        int usuarioId,
+        int partidaId,
+        MoverPartidaRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<FinalizacionPartidaResult?> FinalizarAsync(
         int usuarioId,
         int partidaId,
         CancellationToken cancellationToken = default);

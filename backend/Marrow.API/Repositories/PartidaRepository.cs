@@ -41,10 +41,43 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
         return partida;
     }
 
-    public async Task<Partida> ActualizarAsync(Partida partida, CancellationToken cancellationToken = default)
-    {
-        context.Partidas.Update(partida);
-        await context.SaveChangesAsync(cancellationToken);
-        return partida;
-    }
+    public Task<int> MoverAsync(
+        int id,
+        int usuarioId,
+        int deltaX,
+        int deltaY,
+        CancellationToken cancellationToken = default) =>
+        context.Partidas
+            .Where(partida => partida.Id == id
+                && partida.Personaje.UsuarioId == usuarioId
+                && partida.Estado == EstadoPartida.Activa)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(
+                    partida => partida.PersonajeX,
+                    partida => partida.PersonajeX + deltaX < 0
+                        ? 0
+                        : partida.PersonajeX + deltaX > 10
+                            ? 10
+                            : partida.PersonajeX + deltaX)
+                .SetProperty(
+                    partida => partida.PersonajeY,
+                    partida => partida.PersonajeY + deltaY < 0
+                        ? 0
+                        : partida.PersonajeY + deltaY > 6
+                            ? 6
+                            : partida.PersonajeY + deltaY),
+                cancellationToken);
+
+    public Task<int> FinalizarAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default) =>
+        context.Partidas
+            .Where(partida => partida.Id == id
+                && partida.Personaje.UsuarioId == usuarioId
+                && partida.Estado == EstadoPartida.Activa)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(partida => partida.Estado, EstadoPartida.Finalizada)
+                .SetProperty(partida => partida.FechaUltimaActualizacion, _ => DateTime.UtcNow),
+                cancellationToken);
 }

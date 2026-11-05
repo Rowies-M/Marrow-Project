@@ -1,15 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import FormMessage from '../components/FormMessage.jsx'
 import GameHud from '../components/GameHud.jsx'
 import GameScene from '../components/GameScene.jsx'
-import { getPartidaEstado } from '../services/partidaService.js'
+import { getPartidaEstado, movePartida } from '../services/partidaService.js'
 
 export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const { token } = useAuth()
   const [gameState, setGameState] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isMoving, setIsMoving] = useState(false)
+  const movingRef = useRef(false)
+  const gameStateRef = useRef(null)
+
+  useEffect(() => {
+    gameStateRef.current = gameState
+  }, [gameState])
 
   useEffect(() => {
     let cancelled = false
@@ -39,6 +46,47 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
     return () => { cancelled = true }
   }, [partida.id, token])
 
+  useEffect(() => {
+    const directions = {
+      w: 'arriba',
+      ArrowUp: 'arriba',
+      s: 'abajo',
+      ArrowDown: 'abajo',
+      a: 'izquierda',
+      ArrowLeft: 'izquierda',
+      d: 'derecha',
+      ArrowRight: 'derecha',
+    }
+
+    async function handleKeyDown(event) {
+      const direction = directions[event.key]
+      if (!direction || gameStateRef.current?.estado !== 0) {
+        return
+      }
+
+      event.preventDefault()
+      if (event.repeat || movingRef.current) {
+        return
+      }
+
+      movingRef.current = true
+      setIsMoving(true)
+      setError('')
+      try {
+        const updatedState = await movePartida(token, partida.id, direction)
+        setGameState(updatedState)
+      } catch (requestError) {
+        setError(requestError.message)
+      } finally {
+        movingRef.current = false
+        setIsMoving(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [partida.id, token])
+
   const characterName = gameState?.personajeNombre || personaje.nombre
 
   return (
@@ -56,7 +104,8 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
         <div className="mt-6">
           {isLoading && <p className="rounded-xl bg-slate-900 p-4 text-sm text-slate-400" role="status">Cargando el estado de la partida...</p>}
           <FormMessage>{error}</FormMessage>
-          {!isLoading && !error && gameState && (
+          {isMoving && <p className="text-sm text-slate-400" role="status">Guardando movimiento...</p>}
+          {!isLoading && gameState && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <GameScene
                 characterName={gameState.personajeNombre}

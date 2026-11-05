@@ -77,11 +77,47 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
         return estado is null ? NotFound() : Ok(estado);
     }
 
+    /// <summary>Solicita el desplazamiento de una casilla del personaje en una partida propia.</summary>
+    [HttpPatch("{id:int}/movimiento")]
+    [ProducesResponseType(typeof(EstadoPartidaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Mover(
+        int id,
+        MoverPartidaRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryObtenerUsuarioId(out var usuarioId))
+        {
+            return Unauthorized();
+        }
+
+        var resultado = await partidaService.MoverAsync(usuarioId, id, request, cancellationToken);
+        if (resultado is null)
+        {
+            return NotFound();
+        }
+
+        if (resultado.ConcurrenciaPerdida)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "La partida no está activa.",
+                Detail = "No se puede mover el personaje porque la partida ya fue finalizada."
+            });
+        }
+
+        return Ok(resultado.Estado);
+    }
+
     /// <summary>Finaliza una partida propia.</summary>
     [HttpPatch("{id:int}/finalizar")]
     [ProducesResponseType(typeof(PartidaResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Finalizar(int id, CancellationToken cancellationToken)
     {
         if (!TryObtenerUsuarioId(out var usuarioId))
@@ -89,8 +125,22 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
             return Unauthorized();
         }
 
-        var partida = await partidaService.FinalizarAsync(usuarioId, id, cancellationToken);
-        return partida is null ? NotFound() : Ok(partida);
+        var resultado = await partidaService.FinalizarAsync(usuarioId, id, cancellationToken);
+        if (resultado is null)
+        {
+            return NotFound();
+        }
+
+        if (resultado.ConcurrenciaPerdida)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "La partida no está activa.",
+                Detail = "No se puede finalizar la partida porque ya fue finalizada."
+            });
+        }
+
+        return Ok(resultado.Partida);
     }
 
     private bool TryObtenerUsuarioId(out int usuarioId)

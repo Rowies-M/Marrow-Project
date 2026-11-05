@@ -20,5 +20,15 @@ public interface IPartidaRepository
 
     Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default);
 
-    Task<Partida> ActualizarAsync(Partida partida, CancellationToken cancellationToken = default);
+    Task<int> MoverAsync(
+        int id,
+        int usuarioId,
+        int deltaX,
+        int deltaY,
+        CancellationToken cancellationToken = default);
+
+    Task<int> FinalizarAsync(
+        int id,
+        int usuarioId,
+        CancellationToken cancellationToken = default);
 }
