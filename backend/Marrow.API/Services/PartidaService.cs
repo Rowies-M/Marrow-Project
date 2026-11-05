@@ -43,6 +43,7 @@ public sealed class PartidaService(
             FechaCreacion = ahora,
             FechaUltimaActualizacion = ahora,
             Estado = EstadoPartida.Activa,
+            Dificultad = personaje.DificultadDesbloqueada,
             PersonajeId = personaje.Id,
             EnemigoId = enemigo.Id,
             VidaPersonajeActual = personaje.VidaActual,

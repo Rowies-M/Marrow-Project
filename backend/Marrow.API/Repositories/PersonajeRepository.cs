@@ -32,6 +32,7 @@ public class PersonajeRepository(MarrowDbContext context) : IPersonajeRepository
     public async Task<Personaje> ActualizarAsync(Personaje personaje, CancellationToken cancellationToken = default)
     {
         context.Personajes.Update(personaje);
+        context.Entry(personaje).Property(entidad => entidad.DificultadDesbloqueada).IsModified = false;
         await context.SaveChangesAsync(cancellationToken);
         return personaje;
     }

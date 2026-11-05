@@ -20,6 +20,8 @@ public class Personaje
 
     public ClasePersonaje Clase { get; set; }
 
+    public Dificultad DificultadDesbloqueada { get; set; } = Dificultad.Normal;
+
     public int UsuarioId { get; set; }
 
     public Usuario Usuario { get; set; } = null!;

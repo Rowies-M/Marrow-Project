@@ -217,6 +217,50 @@ public class PartidaServiceTests
         Assert.IsType<NotFoundResult>(respuesta);
     }
 
+    [Theory]
+    [InlineData(Dificultad.Normal)]
+    [InlineData(Dificultad.Dificil)]
+    public async Task Crear_CopiaLaDificultadDelPersonajeSinResultadoDeCombate(Dificultad dificultad)
+    {
+        var repositorio = new PartidaRepositoryFalso(null);
+        var personajes = new PersonajeRepositoryFalso(new Personaje
+        {
+            Id = 3,
+            UsuarioId = UsuarioId,
+            DificultadDesbloqueada = dificultad
+        });
+        var servicio = new PartidaService(repositorio, personajes, new EnemigoRepositoryFalso());
+
+        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+
+        Assert.NotNull(repositorio.Creada);
+        Assert.Equal(dificultad, repositorio.Creada.Dificultad);
+        Assert.Null(repositorio.Creada.ResultadoCombate);
+        Assert.Equal(EstadoPartida.Activa, repositorio.Creada.Estado);
+    }
+
+    [Fact]
+    public async Task Crear_DificultadDeLaPartidaNoCambiaSiElPersonajeDesbloqueaOtra()
+    {
+        var repositorio = new PartidaRepositoryFalso(null);
+        var personaje = new Personaje
+        {
+            Id = 3,
+            UsuarioId = UsuarioId,
+            DificultadDesbloqueada = Dificultad.Normal
+        };
+        var servicio = new PartidaService(
+            repositorio,
+            new PersonajeRepositoryFalso(personaje),
+            new EnemigoRepositoryFalso());
+
+        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+        personaje.DificultadDesbloqueada = Dificultad.Dificil;
+
+        Assert.NotNull(repositorio.Creada);
+        Assert.Equal(Dificultad.Normal, repositorio.Creada.Dificultad);
+    }
+
     // MoverAsync y FinalizarAsync no usan los repositorios de personajes ni de enemigos.
     private static PartidaService CrearServicio(IPartidaRepository repositorio) =>
         new(repositorio, null!, null!);
@@ -254,6 +298,8 @@ public class PartidaServiceTests
 
         public bool LecturaDevuelveNull { get; init; }
 
+        public Partida? Creada { get; private set; }
+
         public Task<Partida?> ObtenerPorIdAsync(
             int id,
             int usuarioId,
@@ -271,8 +317,11 @@ public class PartidaServiceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<Partida> CrearAsync(Partida nuevaPartida, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<Partida> CrearAsync(Partida nuevaPartida, CancellationToken cancellationToken = default)
+        {
+            Creada = nuevaPartida;
+            return Task.FromResult(nuevaPartida);
+        }
 
         public Task<int> MoverAsync(
             int id,
@@ -310,5 +359,40 @@ public class PartidaServiceTests
 
         private Partida? Buscar(int id, int usuarioId) =>
             partida?.Id == id && partida.Personaje.UsuarioId == usuarioId ? partida : null;
+    }
+
+    private sealed class PersonajeRepositoryFalso(Personaje personaje) : IPersonajeRepository
+    {
+        public Task<Personaje?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Personaje?> ObtenerPorIdAsync(
+            int id,
+            int usuarioId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Personaje?>(personaje);
+
+        public Task<IReadOnlyList<Personaje>> ObtenerPorUsuarioAsync(
+            int usuarioId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Personaje> CrearAsync(Personaje nuevo, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Personaje> ActualizarAsync(Personaje existente, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class EnemigoRepositoryFalso : IEnemigoRepository
+    {
+        public Task<Enemigo?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Enemigo?>(new Enemigo { Id = id, Nombre = "Goblin", VidaMaxima = 30 });
+
+        public Task<IReadOnlyList<Enemigo>> ObtenerTodosAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Enemigo> CrearAsync(Enemigo enemigo, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

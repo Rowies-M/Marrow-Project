@@ -94,6 +94,9 @@ namespace Marrow.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("Dificultad")
+                        .HasColumnType("integer");
+
                     b.Property<int>("EnemigoId")
                         .HasColumnType("integer");
 
@@ -119,6 +122,9 @@ namespace Marrow.API.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("PersonajeY")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ResultadoCombate")
                         .HasColumnType("integer");
 
                     b.Property<int>("VidaEnemigoActual")
@@ -151,6 +157,9 @@ namespace Marrow.API.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("Defensa")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DificultadDesbloqueada")
                         .HasColumnType("integer");
 
                     b.Property<int>("Experiencia")

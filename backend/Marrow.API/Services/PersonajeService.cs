@@ -18,16 +18,18 @@ public sealed class PersonajeService(
         ValidarRequest(request);
         await ValidarUsuarioAsync(usuarioId, cancellationToken);
 
+        var estadisticas = ReglasCombate.ObtenerEstadisticas(Dificultad.Normal);
         var personaje = new Personaje
         {
             Nombre = request.Nombre.Trim(),
             Nivel = request.Nivel,
             Experiencia = request.Experiencia,
-            VidaActual = request.VidaActual,
-            VidaMaxima = request.VidaMaxima,
-            Ataque = request.Ataque,
+            VidaActual = estadisticas.VidaJugador,
+            VidaMaxima = estadisticas.VidaJugador,
+            Ataque = estadisticas.DanioJugador,
             Defensa = request.Defensa,
             Clase = request.Clase,
+            DificultadDesbloqueada = Dificultad.Normal,
             UsuarioId = usuarioId
         };
 

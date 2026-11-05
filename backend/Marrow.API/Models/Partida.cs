@@ -10,6 +10,10 @@ public class Partida
 
     public EstadoPartida Estado { get; set; }
 
+    public Dificultad Dificultad { get; set; }
+
+    public ResultadoCombate? ResultadoCombate { get; set; }
+
     public int PersonajeId { get; set; }
 
     public Personaje Personaje { get; set; } = null!;
