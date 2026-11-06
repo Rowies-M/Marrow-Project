@@ -4,4 +4,5 @@ namespace Marrow.API.DTOs;
 public sealed record AtaquePartidaResponse(
     EstadoPartidaResponse Estado,
     int DanioInfligido,
-    int DanioRecibido);
+    int DanioRecibido,
+    int ExperienciaGanada);

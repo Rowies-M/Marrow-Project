@@ -475,6 +475,8 @@ public class PartidaServiceTests
             ["personajeId"] = JsonValueKind.Number,
             ["personajeNombre"] = JsonValueKind.String,
             ["personajeNivel"] = JsonValueKind.Number,
+            ["personajeExperiencia"] = JsonValueKind.Number,
+            ["personajeExperienciaSiguienteNivel"] = JsonValueKind.Number,
             ["vidaPersonajeActual"] = JsonValueKind.Number,
             ["vidaPersonajeMaxima"] = JsonValueKind.Number,
             ["personajeX"] = JsonValueKind.Number,
@@ -833,6 +835,157 @@ public class PartidaServiceTests
         VerificarAceptado(resultado);
         Assert.True(repositorio.UltimoDesbloqueoSolicitado);
         Assert.Equal(Dificultad.Dificil, partida.Personaje.DificultadDesbloqueada);
+    }
+
+    [Theory]
+    [InlineData(Dificultad.Normal)]
+    [InlineData(Dificultad.Dificil)]
+    public async Task Atacar_Victoria_OtorgaCienDeExperienciaYLaDevuelve(Dificultad dificultad)
+    {
+        var partida = CrearPartidaEnCombate(4, 3, dificultad, 60, 10);
+        partida.Personaje.Nivel = 3;
+        partida.Personaje.Experiencia = 20;
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).AtacarAsync(UsuarioId, PartidaId);
+
+        var respuesta = VerificarAceptado(resultado);
+        Assert.Equal(100, respuesta.ExperienciaGanada);
+        Assert.Equal(3, partida.Personaje.Nivel);
+        Assert.Equal(120, partida.Personaje.Experiencia);
+        Assert.Equal(3, respuesta.Estado.PersonajeNivel);
+        Assert.Equal(120, respuesta.Estado.PersonajeExperiencia);
+        Assert.Equal(300, respuesta.Estado.PersonajeExperienciaSiguienteNivel);
+    }
+
+    [Fact]
+    public async Task Atacar_Victoria_SubeDeNivelConservaElSobranteYNoCambiaLasEstadisticas()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        partida.Personaje.Nivel = 1;
+        partida.Personaje.Experiencia = 30;
+        partida.Personaje.VidaMaxima = 80;
+        partida.Personaje.Ataque = 15;
+        partida.Personaje.Defensa = 5;
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).AtacarAsync(UsuarioId, PartidaId);
+
+        var respuesta = VerificarAceptado(resultado);
+        Assert.Equal(2, respuesta.Estado.PersonajeNivel);
+        Assert.Equal(30, respuesta.Estado.PersonajeExperiencia);
+        Assert.Equal(200, respuesta.Estado.PersonajeExperienciaSiguienteNivel);
+        Assert.Equal(80, partida.Personaje.VidaMaxima);
+        Assert.Equal(15, partida.Personaje.Ataque);
+        Assert.Equal(5, partida.Personaje.Defensa);
+    }
+
+    [Fact]
+    public async Task Atacar_Victoria_ProcesaMasDeUnaSubidaDeNivel()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        partida.Personaje.Nivel = 1;
+        partida.Personaje.Experiencia = 350;
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).AtacarAsync(UsuarioId, PartidaId);
+
+        VerificarAceptado(resultado);
+        Assert.Equal(3, partida.Personaje.Nivel);
+        Assert.Equal(150, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Atacar_Derrota_NoOtorgaExperiencia()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 10, 40);
+        partida.Personaje.Experiencia = 20;
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).AtacarAsync(UsuarioId, PartidaId);
+
+        var respuesta = VerificarAceptado(resultado);
+        Assert.Equal(ResultadoCombate.Derrota, respuesta.Estado.ResultadoCombate);
+        Assert.Equal(0, respuesta.ExperienciaGanada);
+        Assert.Null(repositorio.UltimoProgresoSolicitado);
+        Assert.Equal(1, partida.Personaje.Nivel);
+        Assert.Equal(20, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Atacar_SinTerminarElCombate_NoOtorgaExperiencia()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).AtacarAsync(UsuarioId, PartidaId);
+
+        Assert.Equal(0, VerificarAceptado(resultado).ExperienciaGanada);
+        Assert.Null(repositorio.UltimoProgresoSolicitado);
+        Assert.Equal(0, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Finalizar_Abandono_NoOtorgaExperiencia()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        partida.Personaje.Experiencia = 20;
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).FinalizarAsync(UsuarioId, PartidaId);
+
+        Assert.NotNull(resultado);
+        Assert.False(resultado.ConcurrenciaPerdida);
+        Assert.Null(partida.ResultadoCombate);
+        Assert.Equal(1, partida.Personaje.Nivel);
+        Assert.Equal(20, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Atacar_PartidaYaGanada_NoRecompensaDosVeces()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var servicio = CrearServicio(repositorio);
+
+        VerificarAceptado(await servicio.AtacarAsync(UsuarioId, PartidaId));
+        VerificarRechazo(await servicio.AtacarAsync(UsuarioId, PartidaId), RechazoAtaque.PartidaNoActiva);
+
+        Assert.Equal(1, repositorio.LlamadasAplicarAtaque);
+        Assert.Equal(2, partida.Personaje.Nivel);
+        Assert.Equal(0, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Atacar_DosPeticionesSimultaneas_SoloLaPrimeraRecompensa()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var servicio = CrearServicio(repositorio);
+        var leida = await repositorio.ObtenerEstadoAsync(PartidaId, UsuarioId);
+        Assert.NotNull(leida);
+
+        VerificarAceptado(await servicio.AtacarAsync(UsuarioId, PartidaId));
+        var filas = await repositorio.AplicarAtaqueAsync(leida, UsuarioId, 60, 0, ResultadoCombate.Victoria, false, new ProgresoPersonaje(2, 0));
+
+        Assert.Equal(0, filas);
+        Assert.Equal(2, partida.Personaje.Nivel);
+        Assert.Equal(0, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task Atacar_OtraVictoriaCambioElPersonaje_SeRechazaSinFinalizarNiPerderExperiencia()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 60, 10);
+        var repositorio = new PartidaRepositoryFalso(partida)
+        {
+            AntesDeAplicarAtaque = () => partida.Personaje.Experiencia = 50
+        };
+
+        var resultado = await CrearServicio(repositorio).AtacarAsync(UsuarioId, PartidaId);
+
+        VerificarRechazo(resultado, RechazoAtaque.EstadoObsoleto);
+        Assert.Equal(EstadoPartida.Activa, partida.Estado);
+        Assert.Equal(10, partida.VidaEnemigoActual);
+        Assert.Equal(1, partida.Personaje.Nivel);
+        Assert.Equal(50, partida.Personaje.Experiencia);
     }
 
     [Fact]
@@ -1206,7 +1359,7 @@ public class PartidaServiceTests
     {
         Id = PartidaId,
         Estado = EstadoPartida.Activa,
-        Personaje = new Personaje { Nombre = "Bruma", UsuarioId = UsuarioId },
+        Personaje = new Personaje { Nombre = "Bruma", Nivel = 1, UsuarioId = UsuarioId },
         Enemigo = new Enemigo { Nombre = "Goblin" },
         VidaPersonajeActual = 84,
         VidaEnemigoActual = 30,
@@ -1240,6 +1393,8 @@ public class PartidaServiceTests
             3,
             "Bruma",
             1,
+            0,
+            100,
             70,
             80,
             4,
@@ -1254,7 +1409,8 @@ public class PartidaServiceTests
             Dificultad.Normal,
             null),
         15,
-        10);
+        10,
+        0);
 
     private static AtaquePartidaResponse VerificarAceptado(AtaquePartidaResult? resultado)
     {
@@ -1323,6 +1479,8 @@ public class PartidaServiceTests
 
         public bool? UltimoDesbloqueoSolicitado { get; private set; }
 
+        public ProgresoPersonaje? UltimoProgresoSolicitado { get; private set; }
+
         public Task<int> AplicarAtaqueAsync(
             Partida leida,
             int usuarioId,
@@ -1330,10 +1488,12 @@ public class PartidaServiceTests
             int vidaEnemigo,
             ResultadoCombate? resultado,
             bool desbloquearDificil,
+            ProgresoPersonaje? progreso = null,
             CancellationToken cancellationToken = default)
         {
             LlamadasAplicarAtaque++;
             UltimoDesbloqueoSolicitado = desbloquearDificil;
+            UltimoProgresoSolicitado = progreso;
             AntesDeAplicarAtaque?.Invoke();
 
             var actual = Buscar(leida.Id, usuarioId);
@@ -1348,6 +1508,20 @@ public class PartidaServiceTests
                 || actual.EnemigoY != leida.EnemigoY)
             {
                 return Task.FromResult(0);
+            }
+
+            // Equivale a la reversión de la transacción: si el personaje cambió, no se aplica nada.
+            if (progreso is not null
+                && (actual.Personaje.Nivel != leida.Personaje.Nivel
+                    || actual.Personaje.Experiencia != leida.Personaje.Experiencia))
+            {
+                return Task.FromResult(0);
+            }
+
+            if (progreso is not null)
+            {
+                actual.Personaje.Nivel = progreso.Nivel;
+                actual.Personaje.Experiencia = progreso.Experiencia;
             }
 
             actual.VidaPersonajeActual = vidaPersonaje;
@@ -1393,7 +1567,14 @@ public class PartidaServiceTests
             Dificultad = origen.Dificultad,
             ResultadoCombate = origen.ResultadoCombate,
             PersonajeId = origen.PersonajeId,
-            Personaje = origen.Personaje,
+            Personaje = new Personaje
+            {
+                Nombre = origen.Personaje.Nombre,
+                Nivel = origen.Personaje.Nivel,
+                Experiencia = origen.Personaje.Experiencia,
+                UsuarioId = origen.Personaje.UsuarioId,
+                DificultadDesbloqueada = origen.Personaje.DificultadDesbloqueada
+            },
             EnemigoId = origen.EnemigoId,
             Enemigo = origen.Enemigo,
             VidaPersonajeActual = origen.VidaPersonajeActual,

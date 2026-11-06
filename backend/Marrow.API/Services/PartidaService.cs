@@ -177,6 +177,9 @@ public sealed class PartidaService(
             leida.VidaEnemigoActual);
         var desbloquearDificil = resolucion.Resultado is { } resultado
             && ReglasCombate.DesbloqueaDificil(leida.Dificultad, resultado);
+        var progreso = resolucion.Resultado == ResultadoCombate.Victoria
+            ? ReglasProgresion.AplicarVictoria(leida.Personaje.Nivel, leida.Personaje.Experiencia)
+            : null;
 
         var filasActualizadas = await partidaRepository.AplicarAtaqueAsync(
             leida,
@@ -185,6 +188,7 @@ public sealed class PartidaService(
             resolucion.VidaEnemigo,
             resolucion.Resultado,
             desbloquearDificil,
+            progreso,
             cancellationToken);
         var actual = await partidaRepository.ObtenerEstadoAsync(partidaId, usuarioId, cancellationToken);
 
@@ -201,7 +205,11 @@ public sealed class PartidaService(
         }
 
         return new AtaquePartidaResult(
-            new AtaquePartidaResponse(MapearEstado(actual), resolucion.DanioInfligido, resolucion.DanioRecibido),
+            new AtaquePartidaResponse(
+                MapearEstado(actual),
+                resolucion.DanioInfligido,
+                resolucion.DanioRecibido,
+                progreso is null ? 0 : ReglasProgresion.ExperienciaPorVictoria),
             null);
     }
 
@@ -232,6 +240,8 @@ public sealed class PartidaService(
         partida.PersonajeId,
         partida.Personaje.Nombre,
         partida.Personaje.Nivel,
+        partida.Personaje.Experiencia,
+        ReglasProgresion.ExperienciaParaSubir(partida.Personaje.Nivel),
         partida.VidaPersonajeActual,
         ReglasCombate.ObtenerEstadisticas(partida.Dificultad).VidaJugador,
         partida.PersonajeX,

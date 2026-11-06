@@ -26,6 +26,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const [isAttacking, setIsAttacking] = useState(false)
   const [isAbandoning, setIsAbandoning] = useState(false)
   const [lastAttack, setLastAttack] = useState(null)
+  const [reward, setReward] = useState(null)
   const requestInProgressRef = useRef(false)
 
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
   const isActive = gameState?.estado === 'Activa'
   const isAdjacent = gameState ? isEnemyAdjacent(gameState) : false
+  const characterLevel = gameState?.personajeNivel
 
   const handleAttack = useCallback(async () => {
     if (requestInProgressRef.current || !isActive || !isAdjacent) {
@@ -90,6 +92,12 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
       const response = await attackPartida(token, partida.id)
       setGameState(response.estado)
       setLastAttack({ danioInfligido: response.danioInfligido, danioRecibido: response.danioRecibido })
+      if (response.experienciaGanada > 0) {
+        setReward({
+          experience: response.experienciaGanada,
+          newLevel: response.estado.personajeNivel > characterLevel ? response.estado.personajeNivel : null,
+        })
+      }
     } catch (requestError) {
       setError(requestError.message)
       setLastAttack(null)
@@ -105,7 +113,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
       requestInProgressRef.current = false
       setIsAttacking(false)
     }
-  }, [isActive, isAdjacent, partida.id, token])
+  }, [characterLevel, isActive, isAdjacent, partida.id, token])
 
   useGameKeyboard(isActive && !isAbandoning, handleMove, handleAttack)
 
@@ -170,7 +178,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
                   enemyPosition={{ x: gameState.enemigoX, y: gameState.enemigoY }}
                 >
                   {!isActive && (
-                    <GameResultPanel resultado={gameState.resultadoCombate} enemyName={gameState.enemigoNombre} onBackToPartidas={onBackToPartidas} />
+                    <GameResultPanel resultado={gameState.resultadoCombate} enemyName={gameState.enemigoNombre} reward={reward} onBackToPartidas={onBackToPartidas} />
                   )}
                 </GameScene>
                 {isTouchDevice && (
@@ -186,6 +194,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
                   characterName={gameState.personajeNombre}
                   characterLevel={gameState.personajeNivel}
                   characterHealth={{ current: gameState.vidaPersonajeActual, maximum: gameState.vidaPersonajeMaxima }}
+                  characterExperience={{ current: gameState.personajeExperiencia, maximum: gameState.personajeExperienciaSiguienteNivel }}
                   enemyName={gameState.enemigoNombre}
                   enemyLevel={gameState.enemigoNivel}
                   enemyHealth={{ current: gameState.vidaEnemigoActual, maximum: gameState.vidaEnemigoMaxima }}

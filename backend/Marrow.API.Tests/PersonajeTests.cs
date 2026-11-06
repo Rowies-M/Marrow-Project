@@ -239,7 +239,7 @@ public class PersonajeTests
     }
 
     [Fact]
-    public async Task RepositorioActualizar_NoMarcaLaDificultadComoModificada()
+    public async Task RepositorioActualizar_SoloEscribeElNombre()
     {
         var interceptor = new GuardadoInterceptado();
         await using var context = CrearContexto(interceptor);
@@ -254,9 +254,7 @@ public class PersonajeTests
         });
 
         Assert.True(interceptor.Guardo);
-        Assert.Contains(nameof(Personaje.Nombre), interceptor.PropiedadesModificadas);
-        Assert.Contains(nameof(Personaje.VidaActual), interceptor.PropiedadesModificadas);
-        Assert.DoesNotContain(nameof(Personaje.DificultadDesbloqueada), interceptor.PropiedadesModificadas);
+        Assert.Equal([nameof(Personaje.Nombre)], interceptor.PropiedadesModificadas);
     }
 
     [Theory]

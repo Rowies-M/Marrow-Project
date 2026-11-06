@@ -39,5 +39,6 @@ public interface IPartidaRepository
         int vidaEnemigo,
         ResultadoCombate? resultado,
         bool desbloquearDificil,
+        ProgresoPersonaje? progreso = null,
         CancellationToken cancellationToken = default);
 }

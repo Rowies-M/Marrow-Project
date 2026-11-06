@@ -90,6 +90,7 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
         int vidaEnemigo,
         ResultadoCombate? resultado,
         bool desbloquearDificil,
+        ProgresoPersonaje? progreso = null,
         CancellationToken cancellationToken = default)
     {
         var estado = resultado is null ? EstadoPartida.Activa : EstadoPartida.Finalizada;
@@ -124,6 +125,29 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(personaje => personaje.DificultadDesbloqueada, Dificultad.Dificil),
                     cancellationToken);
+        }
+
+        // Solo se llega aquí si este ataque finalizó la partida, por lo que una victoria se recompensa una sola vez.
+        if (filasActualizadas > 0 && progreso is not null)
+        {
+            var nivelLeido = leida.Personaje.Nivel;
+            var experienciaLeida = leida.Personaje.Experiencia;
+            var filasProgreso = await context.Personajes
+                .Where(personaje => personaje.Id == leida.PersonajeId
+                    && personaje.UsuarioId == usuarioId
+                    && personaje.Nivel == nivelLeido
+                    && personaje.Experiencia == experienciaLeida)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(personaje => personaje.Nivel, progreso.Nivel)
+                    .SetProperty(personaje => personaje.Experiencia, progreso.Experiencia),
+                    cancellationToken);
+
+            // Otra victoria cambió el personaje: se revierte todo y el jugador puede volver a intentarlo.
+            if (filasProgreso == 0)
+            {
+                await transaccion.RollbackAsync(cancellationToken);
+                return 0;
+            }
         }
 
         await transaccion.CommitAsync(cancellationToken);

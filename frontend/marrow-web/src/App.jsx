@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './context/useAuth.js'
+import { getCharacterById } from './services/personajeService.js'
 import CharacterSelectionPage from './pages/CharacterSelectionPage.jsx'
 import GamePage from './pages/GamePage.jsx'
 import PartidasPanel from './components/PartidasPanel.jsx'
@@ -8,8 +9,27 @@ import RegisterPage from './pages/RegisterPage.jsx'
 
 const ACTIVE_CHARACTER_STORAGE_KEY = 'marrow.active.character'
 
-function ActiveCharacterHome({ character, onBackToSelection, onPartidaSelected, onLogout }) {
+function ActiveCharacterHome({ character: selectedCharacter, onBackToSelection, onPartidaSelected, onLogout }) {
   const { token, user } = useAuth()
+  const [character, setCharacter] = useState(selectedCharacter)
+  const characterId = selectedCharacter.id
+
+  // Al volver de una partida, el nivel y la experiencia pueden haber cambiado en el backend.
+  useEffect(() => {
+    let cancelled = false
+
+    getCharacterById(token, characterId)
+      .then((response) => {
+        if (!cancelled) {
+          setCharacter(response)
+        }
+      })
+      .catch(() => {
+        // Si falla la lectura, se conservan los datos del personaje seleccionado.
+      })
+
+    return () => { cancelled = true }
+  }, [characterId, token])
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">

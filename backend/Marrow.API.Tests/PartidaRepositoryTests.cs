@@ -220,8 +220,64 @@ public class PartidaRepositoryTests
         Assert.True(transaccion.Liberada);
     }
 
+    [Fact]
+    public async Task AplicarAtaque_ConProgreso_LoGuardaDentroDeLaTransaccionYComparaLoLeido()
+    {
+        var (comandos, transaccion) = await EjecutarAtaqueAsync(progreso: new ProgresoPersonaje(3, 40));
+
+        Assert.Equal(2, comandos.Sql.Count);
+        var progreso = comandos.Sql[1];
+        Assert.Contains("UPDATE \"Personajes\"", progreso);
+        Assert.Equal(3, ValorEnSet(comandos, 1, "Nivel"));
+        Assert.Equal(40, ValorEnSet(comandos, 1, "Experiencia"));
+        Assert.Equal(3, ValorEnWhere(comandos, 1, "Id"));
+        Assert.Equal(42, ValorEnWhere(comandos, 1, "UsuarioId"));
+        Assert.Equal(2, ValorEnWhere(comandos, 1, "Nivel"));
+        Assert.Equal(50, ValorEnWhere(comandos, 1, "Experiencia"));
+        Assert.Equal([true, true], comandos.EnTransaccionAbierta);
+        Assert.Equal([0, 0], comandos.CommitsAlEjecutar);
+        Assert.Equal(1, transaccion.Commits);
+    }
+
+    [Fact]
+    public async Task AplicarAtaque_SinFilasEnLaPartida_NoOtorgaProgreso()
+    {
+        var (comandos, _) = await EjecutarAtaqueAsync(
+            progreso: new ProgresoPersonaje(3, 40),
+            filasPartida: 0,
+            filasEsperadas: 0);
+
+        Assert.Contains("UPDATE \"Partidas\"", Assert.Single(comandos.Sql));
+    }
+
+    [Fact]
+    public async Task AplicarAtaque_SiElPersonajeCambio_NoConfirmaYDevuelveCero()
+    {
+        var (comandos, transaccion) = await EjecutarAtaqueAsync(
+            progreso: new ProgresoPersonaje(3, 40),
+            filasPersonaje: 0,
+            filasEsperadas: 0);
+
+        Assert.Equal(2, comandos.Sql.Count);
+        Assert.Equal(0, transaccion.Commits);
+        Assert.True(transaccion.Liberada);
+    }
+
+    [Fact]
+    public async Task AplicarAtaque_SinProgreso_NoEscribeNivelNiExperiencia()
+    {
+        var (comandos, _) = await EjecutarAtaqueAsync(desbloquearDificil: true);
+
+        Assert.All(comandos.Sql, sql =>
+        {
+            Assert.DoesNotContain("\"Nivel\"", sql);
+            Assert.DoesNotContain("\"Experiencia\"", sql);
+        });
+    }
+
     private static async Task<(ComandosDeAtaque Comandos, ConexionFalsa Transaccion)> EjecutarAtaqueAsync(
         bool desbloquearDificil = false,
+        ProgresoPersonaje? progreso = null,
         int filasPartida = 1,
         int filasPersonaje = 1,
         int filasEsperadas = 1,
@@ -239,7 +295,8 @@ public class PartidaRepositoryTests
             vidaPersonaje,
             vidaEnemigo,
             resultado,
-            desbloquearDificil);
+            desbloquearDificil,
+            progreso);
 
         Assert.Equal(filasEsperadas, filas);
         return (comandos, transaccion);
@@ -281,6 +338,7 @@ public class PartidaRepositoryTests
     {
         Id = 17,
         PersonajeId = 3,
+        Personaje = new Personaje { Id = 3, Nivel = 2, Experiencia = 50 },
         Estado = EstadoPartida.Activa,
         Dificultad = Dificultad.Normal,
         VidaPersonajeActual = 60,

@@ -39,6 +39,8 @@ const gameState = {
   personajeId: character.id,
   personajeNombre: character.nombre,
   personajeNivel: character.nivel,
+  personajeExperiencia: 30,
+  personajeExperienciaSiguienteNivel: 100,
   vidaPersonajeActual: 84,
   vidaPersonajeMaxima: character.vidaMaxima,
   personajeX: 1,
@@ -450,6 +452,71 @@ test.describe('Combate cuerpo a cuerpo', () => {
 
     await page.keyboard.press('ArrowLeft')
     expect(movement.movementRequests).toHaveLength(0)
+  })
+
+  test('muestra el progreso de experiencia del personaje', async ({ page }) => {
+    await prepareMovablePage(page, adjacentState)
+
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1 · XP 30/100')
+    await expect(page.getByRole('progressbar', { name: 'Experiencia de Guerrero Bruma' })).toHaveAttribute('aria-valuenow', '30')
+  })
+
+  test('una victoria muestra la experiencia y el nivel que informa la API', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, vidaEnemigoActual: 10 })
+    await mockAttack(page, (route) => fulfillJson(route, 200, {
+      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Victoria', vidaEnemigoActual: 0, personajeNivel: 2, personajeExperiencia: 30, personajeExperienciaSiguienteNivel: 200 }, 10, 0),
+      experienciaGanada: 100,
+    }))
+
+    await page.getByRole('button', { name: 'Atacar' }).click()
+
+    const result = page.getByRole('group', { name: 'Resultado de la partida' })
+    await expect(result).toContainText('+100 de experiencia · ¡Nivel 2!')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 2 · XP 30/200')
+  })
+
+  test('una victoria sin subir de nivel no anuncia un nivel nuevo', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, vidaEnemigoActual: 10, personajeNivel: 3, personajeExperiencia: 0, personajeExperienciaSiguienteNivel: 300 })
+    await mockAttack(page, (route) => fulfillJson(route, 200, {
+      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Victoria', vidaEnemigoActual: 0, personajeNivel: 3, personajeExperiencia: 100, personajeExperienciaSiguienteNivel: 300 }, 10, 0),
+      experienciaGanada: 100,
+    }))
+
+    await page.getByRole('button', { name: 'Atacar' }).click()
+
+    const result = page.getByRole('group', { name: 'Resultado de la partida' })
+    await expect(result).toContainText('+100 de experiencia')
+    await expect(result).not.toContainText('¡Nivel')
+  })
+
+  test('una derrota no muestra experiencia ganada', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, vidaPersonajeActual: 10 })
+    await mockAttack(page, (route) => fulfillJson(route, 200, {
+      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Derrota', vidaPersonajeActual: 0 }, 15, 10),
+      experienciaGanada: 0,
+    }))
+
+    await page.getByRole('button', { name: 'Atacar' }).click()
+
+    const result = page.getByRole('group', { name: 'Resultado de la partida' })
+    await expect(result.getByRole('heading', { name: 'Derrota' })).toBeVisible()
+    await expect(result).not.toContainText('experiencia')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1 · XP 30/100')
+  })
+
+  test('al volver al listado muestra el nivel actualizado del personaje', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, vidaEnemigoActual: 10 })
+    await mockAttack(page, (route) => fulfillJson(route, 200, {
+      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Victoria', vidaEnemigoActual: 0, personajeNivel: 2 }, 10, 0),
+      experienciaGanada: 100,
+    }))
+    await page.route(`**/api/personajes/${character.id}`, (route) => fulfillJson(route, 200, { ...character, nivel: 2, experiencia: 30 }))
+
+    await page.getByRole('button', { name: 'Atacar' }).click()
+    await page.getByRole('button', { name: 'Volver al listado de partidas' }).click()
+
+    await expect(page.getByRole('heading', { name: 'Tus partidas' })).toBeVisible()
+    await expect(page.getByText('Nivel', { exact: true }).locator('..')).toContainText('2')
   })
 
   test('una partida finalizada sin resultado no otorga victoria ni permite reanudarla', async ({ page }) => {

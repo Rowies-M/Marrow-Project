@@ -11,6 +11,8 @@ public sealed record EstadoPartidaResponse(
     int PersonajeId,
     string PersonajeNombre,
     int PersonajeNivel,
+    int PersonajeExperiencia,
+    int PersonajeExperienciaSiguienteNivel,
     int VidaPersonajeActual,
     int VidaPersonajeMaxima,
     int PersonajeX,
