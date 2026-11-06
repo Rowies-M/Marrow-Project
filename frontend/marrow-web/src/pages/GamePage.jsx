@@ -60,7 +60,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
     async function handleKeyDown(event) {
       const direction = directions[event.key]
-      if (!direction || gameStateRef.current?.estado !== 0) {
+      if (!direction || gameStateRef.current?.estado !== 'Activa') {
         return
       }
 

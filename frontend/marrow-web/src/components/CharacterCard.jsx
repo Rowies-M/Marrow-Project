@@ -1,7 +1,3 @@
-function getClassName(value) {
-  return value === 0 || value === 'Guerrero' ? 'Guerrero' : value
-}
-
 export default function CharacterCard({ character, isSelected, onSelect }) {
   return (
     <button
@@ -15,7 +11,7 @@ export default function CharacterCard({ character, isSelected, onSelect }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xl font-bold text-white">{character.nombre}</p>
-          <p className="mt-1 text-sm text-violet-300">{getClassName(character.clase)}</p>
+          <p className="mt-1 text-sm text-violet-300">{character.clase}</p>
         </div>
         <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-slate-200">
           Nivel {character.nivel}

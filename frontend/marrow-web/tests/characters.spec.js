@@ -18,7 +18,7 @@ const character = {
   vidaMaxima: 100,
   ataque: 10,
   defensa: 5,
-  clase: 0,
+  clase: 'Guerrero',
 }
 
 async function prepareAuthenticatedPage(page) {

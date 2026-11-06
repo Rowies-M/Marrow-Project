@@ -1,10 +1,14 @@
+using System.Text.Json;
 using Marrow.API.Data;
 using Marrow.API.IntegrationTests.Infraestructura;
+using Marrow.API.Models;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Marrow.API.IntegrationTests;
 
@@ -27,6 +31,22 @@ public class ArquitecturaFabricaTests
         Assert.DoesNotContain(proveedores, proveedor => proveedor is EnvironmentVariablesConfigurationProvider);
         Assert.Null(configuracion.GetConnectionString("MarrowDatabase"));
         Assert.Equal("Marrow.IntegrationTests", configuracion["Jwt:Issuer"]);
+    }
+
+    [Theory]
+    [InlineData(EstadoPartida.Activa, "Activa")]
+    [InlineData(EstadoPartida.Finalizada, "Finalizada")]
+    [InlineData(Dificultad.Normal, "Normal")]
+    [InlineData(Dificultad.Dificil, "Dificil")]
+    [InlineData(ResultadoCombate.Victoria, "Victoria")]
+    [InlineData(ResultadoCombate.Derrota, "Derrota")]
+    [InlineData(ClasePersonaje.Guerrero, "Guerrero")]
+    public async Task Api_SerializaLosEnumsComoTexto(object valor, string esperado)
+    {
+        await using var fabrica = FabricaMarrow.CrearSinBaseParaPruebas();
+        var opciones = fabrica.Services.GetRequiredService<IOptions<JsonOptions>>().Value.JsonSerializerOptions;
+
+        Assert.Equal($"\"{esperado}\"", JsonSerializer.Serialize(valor, valor.GetType(), opciones));
     }
 
     [Fact]

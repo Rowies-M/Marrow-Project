@@ -8,6 +8,10 @@ public sealed class PersonajeService(
     IPersonajeRepository personajeRepository,
     IUsuarioRepository usuarioRepository) : IPersonajeService
 {
+    private const int NivelInicial = 1;
+    private const int ExperienciaInicial = 0;
+    private const int DefensaInicial = 5;
+
     public async Task<PersonajeResponse> CrearAsync(
         int usuarioId,
         CrearPersonajeRequest request,
@@ -15,20 +19,20 @@ public sealed class PersonajeService(
     {
         ValidarId(usuarioId, nameof(usuarioId));
         ArgumentNullException.ThrowIfNull(request);
-        ValidarRequest(request);
+        ValidarNombre(request.Nombre);
         await ValidarUsuarioAsync(usuarioId, cancellationToken);
 
         var estadisticas = ReglasCombate.ObtenerEstadisticas(Dificultad.Normal);
         var personaje = new Personaje
         {
             Nombre = request.Nombre.Trim(),
-            Nivel = request.Nivel,
-            Experiencia = request.Experiencia,
+            Nivel = NivelInicial,
+            Experiencia = ExperienciaInicial,
             VidaActual = estadisticas.VidaJugador,
             VidaMaxima = estadisticas.VidaJugador,
             Ataque = estadisticas.DanioJugador,
-            Defensa = request.Defensa,
-            Clase = request.Clase,
+            Defensa = DefensaInicial,
+            Clase = ClasePersonaje.Guerrero,
             DificultadDesbloqueada = Dificultad.Normal,
             UsuarioId = usuarioId
         };
@@ -67,7 +71,7 @@ public sealed class PersonajeService(
         ValidarId(usuarioId, nameof(usuarioId));
         ValidarId(personajeId, nameof(personajeId));
         ArgumentNullException.ThrowIfNull(request);
-        ValidarRequest(request);
+        ValidarNombre(request.Nombre);
 
         var personaje = await personajeRepository.ObtenerPorIdAsync(personajeId, usuarioId, cancellationToken);
         if (personaje is null)
@@ -76,13 +80,6 @@ public sealed class PersonajeService(
         }
 
         personaje.Nombre = request.Nombre.Trim();
-        personaje.Nivel = request.Nivel;
-        personaje.Experiencia = request.Experiencia;
-        personaje.VidaActual = request.VidaActual;
-        personaje.VidaMaxima = request.VidaMaxima;
-        personaje.Ataque = request.Ataque;
-        personaje.Defensa = request.Defensa;
-        personaje.Clase = request.Clase;
 
         var personajeActualizado = await personajeRepository.ActualizarAsync(personaje, cancellationToken);
         return MapearRespuesta(personajeActualizado);
@@ -107,40 +104,11 @@ public sealed class PersonajeService(
         personaje.Defensa,
         personaje.Clase);
 
-    private static void ValidarRequest(CrearPersonajeRequest request) =>
-        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.Defensa, request.Clase);
-
-    private static void ValidarRequest(ActualizarPersonajeRequest request)
-    {
-        ValidarDatos(request.Nombre, request.Nivel, request.Experiencia, request.Defensa, request.Clase);
-
-        if (request.VidaActual < 0 || request.VidaMaxima < 0 || request.Ataque < 0 ||
-            request.VidaActual > request.VidaMaxima)
-        {
-            throw new ArgumentException("Las estadísticas del personaje no son válidas.");
-        }
-    }
-
-    private static void ValidarDatos(
-        string nombre,
-        int nivel,
-        int experiencia,
-        int defensa,
-        ClasePersonaje clase)
+    private static void ValidarNombre(string nombre)
     {
         if (string.IsNullOrWhiteSpace(nombre))
         {
             throw new ArgumentException("El nombre del personaje es obligatorio.", nameof(nombre));
-        }
-
-        if (nivel <= 0 || experiencia < 0 || defensa < 0)
-        {
-            throw new ArgumentException("Las estadísticas del personaje no son válidas.");
-        }
-
-        if (clase != ClasePersonaje.Guerrero)
-        {
-            throw new ArgumentException("La única clase disponible es Guerrero.", nameof(clase));
         }
     }
 

@@ -9,10 +9,6 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
-function getEstadoLabel(estado) {
-  return estado === 0 ? 'Activa' : 'Finalizada'
-}
-
 export default function PartidasPanel({ token, personajeId, onPartidaSelected }) {
   const [partidas, setPartidas] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -108,7 +104,7 @@ export default function PartidasPanel({ token, personajeId, onPartidaSelected })
           <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-5 text-sm text-slate-400">Todavía no tenés partidas.</p>
         ) : (
           partidas.map((partida) => {
-            const isActive = partida.estado === 0
+            const isActive = partida.estado === 'Activa'
             const isFinalizing = finalizingId === partida.id
 
             return (
@@ -125,7 +121,7 @@ export default function PartidasPanel({ token, personajeId, onPartidaSelected })
                     </div>
                     <div>
                       <p className="text-slate-500">Estado</p>
-                      <p className={isActive ? 'font-semibold text-emerald-300' : 'font-semibold text-slate-300'}>{getEstadoLabel(partida.estado)}</p>
+                      <p className={isActive ? 'font-semibold text-emerald-300' : 'font-semibold text-slate-300'}>{partida.estado}</p>
                     </div>
                   </div>
                   {isActive && (

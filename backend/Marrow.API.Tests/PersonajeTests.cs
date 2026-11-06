@@ -34,116 +34,81 @@ public class PersonajeTests
         var request = DeserializarCrear($$"""
             {
               "nombre": "Bruma",
-              "nivel": 1,
-              "experiencia": 0,
+              "nivel": 99,
+              "experiencia": 999,
               "vidaActual": {{vidaActual}},
               "vidaMaxima": {{vidaMaxima}},
               "ataque": {{ataque}},
-              "defensa": 5,
-              "clase": 0
+              "defensa": 77,
+              "clase": 99
             }
             """);
 
         Assert.Empty(ValidarAnotaciones(request));
         var respuesta = await servicio.CrearAsync(UsuarioId, request);
 
+        Assert.Equal(1, respuesta.Nivel);
+        Assert.Equal(0, respuesta.Experiencia);
         Assert.Equal(80, respuesta.VidaActual);
         Assert.Equal(80, respuesta.VidaMaxima);
         Assert.Equal(15, respuesta.Ataque);
+        Assert.Equal(5, respuesta.Defensa);
+        Assert.Equal(ClasePersonaje.Guerrero, respuesta.Clase);
         Assert.NotNull(repositorio.Guardado);
+        Assert.Equal(1, repositorio.Guardado.Nivel);
+        Assert.Equal(0, repositorio.Guardado.Experiencia);
         Assert.Equal(80, repositorio.Guardado.VidaActual);
         Assert.Equal(80, repositorio.Guardado.VidaMaxima);
         Assert.Equal(15, repositorio.Guardado.Ataque);
+        Assert.Equal(5, repositorio.Guardado.Defensa);
     }
 
     [Fact]
-    public async Task Crear_SinEnviarEstadisticas_AsignaLosValoresDelBackend()
-    {
-        var servicio = new PersonajeService(new PersonajeRepositoryFalso(), new UsuarioRepositoryFalso());
-
-        var respuesta = await servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest
-        {
-            Nombre = "Bruma",
-            Nivel = 1,
-            Clase = ClasePersonaje.Guerrero
-        });
-
-        Assert.Equal(80, respuesta.VidaActual);
-        Assert.Equal(80, respuesta.VidaMaxima);
-        Assert.Equal(15, respuesta.Ataque);
-    }
-
-    [Fact]
-    public async Task Crear_ConservaLosDemasCampos()
+    public async Task Crear_RecortaElNombreYAsignaElUsuario()
     {
         var repositorio = new PersonajeRepositoryFalso();
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
 
-        var respuesta = await servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest
-        {
-            Nombre = "  Bruma  ",
-            Nivel = 3,
-            Experiencia = 40,
-            Defensa = 5,
-            Clase = ClasePersonaje.Guerrero
-        });
+        var respuesta = await servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest { Nombre = "  Bruma  " });
 
         Assert.Equal("Bruma", respuesta.Nombre);
-        Assert.Equal(3, respuesta.Nivel);
-        Assert.Equal(40, respuesta.Experiencia);
-        Assert.Equal(5, respuesta.Defensa);
-        Assert.Equal(ClasePersonaje.Guerrero, respuesta.Clase);
         Assert.NotNull(repositorio.Guardado);
         Assert.Equal(UsuarioId, repositorio.Guardado.UsuarioId);
     }
 
     [Theory]
-    [InlineData("   ", 1, 0, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 0, 0, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, -1, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, 0, -1, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, 0, 5, (ClasePersonaje)99)]
-    public async Task Crear_DatosInvalidos_LanzaErrorSinGuardar(
-        string nombre,
-        int nivel,
-        int experiencia,
-        int defensa,
-        ClasePersonaje clase)
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Crear_NombreInvalido_LanzaErrorSinGuardar(string nombre)
     {
         var repositorio = new PersonajeRepositoryFalso();
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest
-        {
-            Nombre = nombre,
-            Nivel = nivel,
-            Experiencia = experiencia,
-            Defensa = defensa,
-            Clase = clase
-        }));
+        await Assert.ThrowsAsync<ArgumentException>(() => servicio.CrearAsync(
+            UsuarioId,
+            new CrearPersonajeRequest { Nombre = nombre }));
 
         Assert.Null(repositorio.Guardado);
     }
 
     [Theory]
-    [InlineData("""{ "nombre": "", "nivel": 1, "clase": 0 }""")]
-    [InlineData("""{ "nombre": "Bruma", "nivel": 0, "clase": 0 }""")]
-    [InlineData("""{ "nombre": "Bruma", "nivel": 1, "experiencia": -1, "clase": 0 }""")]
-    [InlineData("""{ "nombre": "Bruma", "nivel": 1, "defensa": -1, "clase": 0 }""")]
-    [InlineData("""{ "nombre": "Bruma", "nivel": 1, "clase": 99 }""")]
-    public void CrearRequest_MantieneLasAnotacionesDeLosDemasCampos(string json)
+    [InlineData(0)]
+    [InlineData(101)]
+    public void CrearRequest_ValidaLaLongitudDelNombre(int longitud)
     {
-        Assert.NotEmpty(ValidarAnotaciones(DeserializarCrear(json)));
+        var request = new CrearPersonajeRequest { Nombre = new string('a', longitud) };
+
+        Assert.NotEmpty(ValidarAnotaciones(request));
     }
 
     [Theory]
-    [InlineData(nameof(ActualizarPersonajeRequest.VidaActual))]
-    [InlineData(nameof(ActualizarPersonajeRequest.VidaMaxima))]
-    [InlineData(nameof(ActualizarPersonajeRequest.Ataque))]
-    public void Requests_SoloElDeActualizacionAceptaEstadisticas(string propiedad)
+    [InlineData(typeof(CrearPersonajeRequest))]
+    [InlineData(typeof(ActualizarPersonajeRequest))]
+    public void RequestDePersonaje_SoloAceptaElNombre(Type tipoRequest)
     {
-        Assert.Null(typeof(CrearPersonajeRequest).GetProperty(propiedad));
-        Assert.NotNull(typeof(ActualizarPersonajeRequest).GetProperty(propiedad));
+        var propiedad = Assert.Single(tipoRequest.GetProperties());
+
+        Assert.Equal(nameof(Personaje.Nombre), propiedad.Name);
     }
 
     [Fact]
@@ -152,12 +117,7 @@ public class PersonajeTests
         var repositorio = new PersonajeRepositoryFalso();
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
 
-        await servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest
-        {
-            Nombre = "Bruma",
-            Nivel = 1,
-            Clase = ClasePersonaje.Guerrero
-        });
+        await servicio.CrearAsync(UsuarioId, new CrearPersonajeRequest { Nombre = "Bruma" });
 
         Assert.NotNull(repositorio.Guardado);
         Assert.Equal(Dificultad.Normal, repositorio.Guardado.DificultadDesbloqueada);
@@ -189,12 +149,10 @@ public class PersonajeTests
         };
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
 
-        await servicio.ActualizarAsync(UsuarioId, PersonajeId, new ActualizarPersonajeRequest
-        {
-            Nombre = "Nuevo nombre",
-            Nivel = 2,
-            Clase = ClasePersonaje.Guerrero
-        });
+        await servicio.ActualizarAsync(
+            UsuarioId,
+            PersonajeId,
+            new ActualizarPersonajeRequest { Nombre = "Nuevo nombre" });
 
         Assert.NotNull(repositorio.Guardado);
         Assert.Equal("Nuevo nombre", repositorio.Guardado.Nombre);
@@ -202,39 +160,57 @@ public class PersonajeTests
     }
 
     [Fact]
-    public async Task Actualizar_GuardaLosValoresEnviados()
+    public async Task Actualizar_SoloCambiaElNombreAunqueElClienteEnvieEstadisticas()
     {
-        var repositorio = new PersonajeRepositoryFalso { Existente = CrearExistente() };
-        var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
-
-        var respuesta = await servicio.ActualizarAsync(UsuarioId, PersonajeId, new ActualizarPersonajeRequest
+        var repositorio = new PersonajeRepositoryFalso
         {
-            Nombre = "  Nuevo nombre  ",
-            Nivel = 2,
-            Experiencia = 30,
-            VidaActual = 90,
-            VidaMaxima = 110,
-            Ataque = 12,
-            Defensa = 7,
-            Clase = ClasePersonaje.Guerrero
-        });
+            Existente = new Personaje
+            {
+                Id = PersonajeId,
+                Nombre = "Bruma",
+                Nivel = 3,
+                Experiencia = 40,
+                VidaActual = 50,
+                VidaMaxima = 80,
+                Ataque = 15,
+                Defensa = 5,
+                Clase = ClasePersonaje.Guerrero,
+                UsuarioId = UsuarioId
+            }
+        };
+        var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
+        var request = JsonSerializer.Deserialize<ActualizarPersonajeRequest>(
+            """
+            {
+              "nombre": "  Nuevo nombre  ",
+              "nivel": 99,
+              "experiencia": 999,
+              "vidaActual": 999,
+              "vidaMaxima": 999,
+              "ataque": 999,
+              "defensa": 999,
+              "clase": 99
+            }
+            """,
+            JsonSerializerOptions.Web)!;
+
+        var respuesta = await servicio.ActualizarAsync(UsuarioId, PersonajeId, request);
 
         Assert.NotNull(respuesta);
         Assert.Equal("Nuevo nombre", respuesta.Nombre);
-        Assert.Equal(2, respuesta.Nivel);
-        Assert.Equal(30, respuesta.Experiencia);
-        Assert.Equal(90, respuesta.VidaActual);
-        Assert.Equal(110, respuesta.VidaMaxima);
-        Assert.Equal(12, respuesta.Ataque);
-        Assert.Equal(7, respuesta.Defensa);
+        Assert.Equal(3, respuesta.Nivel);
+        Assert.Equal(40, respuesta.Experiencia);
+        Assert.Equal(50, respuesta.VidaActual);
+        Assert.Equal(80, respuesta.VidaMaxima);
+        Assert.Equal(15, respuesta.Ataque);
+        Assert.Equal(5, respuesta.Defensa);
+        Assert.Equal(ClasePersonaje.Guerrero, respuesta.Clase);
     }
 
     [Theory]
-    [InlineData(-1, 100, 10)]
-    [InlineData(50, -1, 10)]
-    [InlineData(50, 100, -1)]
-    [InlineData(101, 100, 10)]
-    public async Task Actualizar_EstadisticasInvalidas_LanzaErrorSinGuardar(int vidaActual, int vidaMaxima, int ataque)
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Actualizar_NombreInvalido_LanzaErrorSinGuardar(string nombre)
     {
         var repositorio = new PersonajeRepositoryFalso { Existente = CrearExistente() };
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
@@ -242,46 +218,7 @@ public class PersonajeTests
         await Assert.ThrowsAsync<ArgumentException>(() => servicio.ActualizarAsync(
             UsuarioId,
             PersonajeId,
-            new ActualizarPersonajeRequest
-            {
-                Nombre = "Bruma",
-                Nivel = 1,
-                VidaActual = vidaActual,
-                VidaMaxima = vidaMaxima,
-                Ataque = ataque,
-                Clase = ClasePersonaje.Guerrero
-            }));
-
-        Assert.Null(repositorio.Guardado);
-    }
-
-    [Theory]
-    [InlineData("   ", 1, 0, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 0, 0, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, -1, 5, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, 0, -1, ClasePersonaje.Guerrero)]
-    [InlineData("Bruma", 1, 0, 5, (ClasePersonaje)99)]
-    public async Task Actualizar_DatosComunesInvalidos_LanzaErrorSinGuardar(
-        string nombre,
-        int nivel,
-        int experiencia,
-        int defensa,
-        ClasePersonaje clase)
-    {
-        var repositorio = new PersonajeRepositoryFalso { Existente = CrearExistente() };
-        var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
-
-        await Assert.ThrowsAsync<ArgumentException>(() => servicio.ActualizarAsync(
-            UsuarioId,
-            PersonajeId,
-            new ActualizarPersonajeRequest
-            {
-                Nombre = nombre,
-                Nivel = nivel,
-                Experiencia = experiencia,
-                Defensa = defensa,
-                Clase = clase
-            }));
+            new ActualizarPersonajeRequest { Nombre = nombre }));
 
         Assert.Null(repositorio.Guardado);
     }
@@ -292,12 +229,10 @@ public class PersonajeTests
         var repositorio = new PersonajeRepositoryFalso();
         var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
 
-        var respuesta = await servicio.ActualizarAsync(UsuarioId, PersonajeId, new ActualizarPersonajeRequest
-        {
-            Nombre = "Bruma",
-            Nivel = 1,
-            Clase = ClasePersonaje.Guerrero
-        });
+        var respuesta = await servicio.ActualizarAsync(
+            UsuarioId,
+            PersonajeId,
+            new ActualizarPersonajeRequest { Nombre = "Bruma" });
 
         Assert.Null(respuesta);
         Assert.Null(repositorio.Guardado);

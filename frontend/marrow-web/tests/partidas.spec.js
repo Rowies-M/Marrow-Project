@@ -18,21 +18,21 @@ const character = {
   vidaMaxima: 100,
   ataque: 10,
   defensa: 5,
-  clase: 0,
+  clase: 'Guerrero',
 }
 
 const activePartida = {
   id: 17,
   fechaCreacion: '2026-11-03T15:00:00Z',
   fechaUltimaActualizacion: '2026-11-03T15:00:00Z',
-  estado: 0,
+  estado: 'Activa',
   personajeId: character.id,
 }
 
 const finalizedPartida = {
   ...activePartida,
   fechaUltimaActualizacion: '2026-11-03T16:00:00Z',
-  estado: 1,
+  estado: 'Finalizada',
 }
 
 const listedFinalizedPartida = {

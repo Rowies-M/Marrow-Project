@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Marrow.API.Controllers;
 using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
@@ -470,7 +471,7 @@ public class PartidaServiceTests
             ["partidaId"] = JsonValueKind.Number,
             ["fechaCreacion"] = JsonValueKind.String,
             ["fechaUltimaActualizacion"] = JsonValueKind.String,
-            ["estado"] = JsonValueKind.Number,
+            ["estado"] = JsonValueKind.String,
             ["personajeId"] = JsonValueKind.Number,
             ["personajeNombre"] = JsonValueKind.String,
             ["personajeNivel"] = JsonValueKind.Number,
@@ -485,11 +486,13 @@ public class PartidaServiceTests
             ["vidaEnemigoMaxima"] = JsonValueKind.Number,
             ["enemigoX"] = JsonValueKind.Number,
             ["enemigoY"] = JsonValueKind.Number,
-            ["dificultad"] = JsonValueKind.Number,
+            ["dificultad"] = JsonValueKind.String,
             ["resultadoCombate"] = JsonValueKind.Null
         };
+        var opciones = new JsonSerializerOptions(JsonSerializerOptions.Web);
+        opciones.Converters.Add(new JsonStringEnumConverter());
 
-        using var json = JsonDocument.Parse(JsonSerializer.Serialize(estado, JsonSerializerOptions.Web));
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(estado, opciones));
 
         var obtenidos = json.RootElement.EnumerateObject()
             .ToDictionary(propiedad => propiedad.Name, propiedad => propiedad.Value.ValueKind);
