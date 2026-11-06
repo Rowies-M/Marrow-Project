@@ -38,7 +38,7 @@ public sealed class BloqueoEjecucionPruebas : IAsyncDisposable
     /// <summary>
     /// Punto de sustitución para dobles de prueba: solo permite reemplazar el objeto de conexión.
     /// La validación de la cadena y la verificación de identidad siempre se ejecutan.
-    /// Solo es visible para la suite aislada, y ArquitecturaTests limita qué métodos pueden llamarlo.
+    /// Solo es visible para la suite aislada.
     /// </summary>
     internal static async Task<BloqueoEjecucionPruebas> AdquirirConFabricaDeConexionAsync(
         string conexionValidada,

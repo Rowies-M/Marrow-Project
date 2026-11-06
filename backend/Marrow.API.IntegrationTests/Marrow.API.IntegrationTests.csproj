@@ -29,14 +29,10 @@
   </ItemGroup>
 
   <!--
-    Estos dos proyectos se compilan, pero esta suite no se enlaza con ellos: no puede invocar su código.
-    Sus DLL se copian solo para leerlos como bytes con PEReader.
+    Este proyecto se compila, pero esta suite no se enlaza con él: no puede invocar su código.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\Marrow.API.IntegrationTests.Muestras\Marrow.API.IntegrationTests.Muestras.csproj" ReferenceOutputAssembly="false" ExcludeAssets="all" PrivateAssets="all" />
     <ProjectReference Include="..\Marrow.API.PostgresTests\Marrow.API.PostgresTests.csproj" ReferenceOutputAssembly="false" ExcludeAssets="all" PrivateAssets="all" />
-    <None Include="..\Marrow.API.IntegrationTests.Muestras\bin\$(Configuration)\net10.0\Marrow.API.IntegrationTests.Muestras.dll" Link="AnalisisIl\Marrow.API.IntegrationTests.Muestras.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-    <None Include="..\Marrow.API.PostgresTests\bin\$(Configuration)\net10.0\Marrow.API.PostgresTests.dll" Link="AnalisisIl\Marrow.API.PostgresTests.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

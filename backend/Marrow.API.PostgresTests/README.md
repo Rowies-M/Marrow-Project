@@ -3,7 +3,7 @@
 Pruebas de integración que se conectan a PostgreSQL real, solo a la base `marrow_test`.
 
 Este proyecto **no pertenece a `Marrow.sln`**, así que `dotnet test backend/Marrow.sln` no lo ejecuta. La suite
-aislada `Marrow.API.IntegrationTests` lo compila y analiza su DLL como bytes, pero no se enlaza con él ni lo invoca.
+aislada `Marrow.API.IntegrationTests` lo compila, pero no se enlaza con él ni lo invoca.
 
 ## Ejecución
 

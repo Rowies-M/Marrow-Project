@@ -252,7 +252,7 @@ public sealed class FabricaVariada : IAsyncDisposable
 {
     private readonly WebApplicationFactory<Program> interna;
 
-    /// <summary>ArquitecturaTests exige que solo FabricaMarrow lo use.</summary>
+    /// <summary>Solo FabricaMarrow debe usarlo.</summary>
     internal FabricaVariada(WebApplicationFactory<Program> interna)
     {
         this.interna = interna;
