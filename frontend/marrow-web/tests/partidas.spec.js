@@ -81,6 +81,43 @@ test.describe('Partidas', () => {
     await expect(page.getByRole('button', { name: 'Finalizar' })).toBeVisible()
   })
 
+  test('distingue victoria, derrota y abandono según el estado de cada partida', async ({ page }) => {
+    const finalizadas = [
+      { partida: { ...finalizedPartida, id: 21 }, resultadoCombate: 'Victoria' },
+      { partida: { ...finalizedPartida, id: 22 }, resultadoCombate: 'Derrota' },
+      { partida: { ...finalizedPartida, id: 23 }, resultadoCombate: null },
+    ]
+    for (const { partida, resultadoCombate } of finalizadas) {
+      await page.route(`**/api/partidas/${partida.id}/estado`, async (route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ estado: 'Finalizada', resultadoCombate }) })
+      })
+    }
+
+    await prepareAuthenticatedPage(page, finalizadas.map(({ partida }) => partida))
+
+    const cards = page.getByRole('article')
+    await expect(cards.nth(0)).toContainText('Victoria')
+    await expect(cards.nth(1)).toContainText('Derrota')
+    await expect(cards.nth(2)).toContainText('Abandonada')
+  })
+
+  test('no consulta el resultado de una partida activa ni lo inventa si falla la lectura', async ({ page }) => {
+    const consultadas = []
+    await page.route('**/api/partidas/*/estado', async (route) => {
+      consultadas.push(route.request().url())
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Error' }) })
+    })
+
+    await prepareAuthenticatedPage(page, [activePartida, listedFinalizedPartida])
+
+    await expect.poll(() => consultadas.length).toBe(1)
+    expect(consultadas[0]).toContain(`/api/partidas/${listedFinalizedPartida.id}/estado`)
+    await expect(page.getByText('Finalizada')).toBeVisible()
+    await expect(page.getByText('Resultado')).toHaveCount(0)
+    await expect(page.getByText('Abandonada')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+
   test('muestra un mensaje cuando no existen partidas', async ({ page }) => {
     await prepareAuthenticatedPage(page)
 

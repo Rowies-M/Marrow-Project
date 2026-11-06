@@ -28,6 +28,13 @@ export function movePartida(token, partidaId, direccion) {
   })
 }
 
+export function attackPartida(token, partidaId) {
+  return apiRequest(`/api/partidas/${partidaId}/ataque`, {
+    method: 'POST',
+    token,
+  })
+}
+
 export function finalizePartida(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}/finalizar`, {
     method: 'PATCH',

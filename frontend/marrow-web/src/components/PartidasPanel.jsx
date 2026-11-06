@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import FormMessage from './FormMessage.jsx'
-import { createPartida, finalizePartida, getPartidas } from '../services/partidaService.js'
+import { createPartida, finalizePartida, getPartidaEstado, getPartidas } from '../services/partidaService.js'
+import { formatDate } from '../utils/formatDate.js'
 
-function formatDate(value) {
-  return new Intl.DateTimeFormat('es-AR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value))
+const RESULT_STYLES = {
+  Victoria: 'font-semibold text-amber-300',
+  Derrota: 'font-semibold text-rose-300',
+  Abandonada: 'font-semibold text-slate-300',
 }
 
 export default function PartidasPanel({ token, personajeId, onPartidaSelected }) {
@@ -15,6 +15,38 @@ export default function PartidasPanel({ token, personajeId, onPartidaSelected })
   const [isCreating, setIsCreating] = useState(false)
   const [finalizingId, setFinalizingId] = useState(null)
   const [error, setError] = useState('')
+  const [resultados, setResultados] = useState({})
+
+  // El listado no incluye el resultado, así que se lee del estado de cada partida finalizada.
+  // El backend solo deja una partida finalizada sin resultado cuando se abandona.
+  // Si la lectura falla, el resultado queda vacío: nunca se deduce.
+  useEffect(() => {
+    const pendientes = partidas.filter((partida) => partida.estado === 'Finalizada' && !(partida.id in resultados))
+    if (pendientes.length === 0) {
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadResultados() {
+      const lecturas = await Promise.allSettled(pendientes.map((partida) => getPartidaEstado(token, partida.id)))
+      if (cancelled) {
+        return
+      }
+
+      setResultados((current) => {
+        const updated = { ...current }
+        pendientes.forEach((partida, index) => {
+          const lectura = lecturas[index]
+          updated[partida.id] = lectura.status === 'fulfilled' ? (lectura.value.resultadoCombate ?? 'Abandonada') : null
+        })
+        return updated
+      })
+    }
+
+    loadResultados()
+    return () => { cancelled = true }
+  }, [partidas, resultados, token])
 
   useEffect(() => {
     let cancelled = false
@@ -106,11 +138,12 @@ export default function PartidasPanel({ token, personajeId, onPartidaSelected })
           partidas.map((partida) => {
             const isActive = partida.estado === 'Activa'
             const isFinalizing = finalizingId === partida.id
+            const resultado = resultados[partida.id]
 
             return (
               <article key={partida.id} className="rounded-xl bg-slate-900 p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="grid gap-2 text-sm sm:grid-cols-3 sm:gap-6">
+                  <div className={`grid gap-2 text-sm sm:gap-6 ${resultado ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                     <div>
                       <p className="text-slate-500">ID</p>
                       <p className="font-semibold text-white">{partida.id}</p>
@@ -123,6 +156,12 @@ export default function PartidasPanel({ token, personajeId, onPartidaSelected })
                       <p className="text-slate-500">Estado</p>
                       <p className={isActive ? 'font-semibold text-emerald-300' : 'font-semibold text-slate-300'}>{partida.estado}</p>
                     </div>
+                    {resultado && (
+                      <div>
+                        <p className="text-slate-500">Resultado</p>
+                        <p className={RESULT_STYLES[resultado]}>{resultado}</p>
+                      </div>
+                    )}
                   </div>
                   {isActive && (
                     <div className="flex flex-wrap gap-2">
