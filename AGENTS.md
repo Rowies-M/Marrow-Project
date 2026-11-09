@@ -38,15 +38,18 @@ Use dependency injection and asynchronous operations where appropriate.
 ## Game concept
 
 - Top-down 2D perspective.
-- Small dungeon.
+- 11×7 grid map.
 - One playable class: Warrior.
 - Four-direction movement.
-- Turn-based combat.
-- Basic attack and two abilities.
-- Enemies: Skeleton, Demon and Boss.
-- Experience and character progression.
+- Turn-based melee combat.
+- Minimum level 1 and maximum level 3.
+- One enemy per game, assigned by the backend from the character level: level 1 Goblin, level 2 Esqueleto, level 3 Orco.
+- Basic attack from level 1.
+- One special ability: Golpe poderoso, unlocked from level 2.
+- Experience and character progression: each enemy grants 100 XP on victory only; level 1 to 2 costs 100 XP and level 2 to 3 costs 200 XP; at level 3 XP keeps accumulating.
+- Normal difficulty is the default. Winning a game on Normal unlocks Hard permanently, without selecting it; Hard is chosen when creating a game.
 - Save and load progress.
-- No inventory in the initial MVP.
+- No inventory, equipment, shops, quests, NPCs, multiplayer, additional maps or skill trees.
 
 ## Development rules
 
