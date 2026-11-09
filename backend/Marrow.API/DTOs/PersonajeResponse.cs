@@ -12,4 +12,6 @@ public sealed record PersonajeResponse(
     int VidaMaxima,
     int Ataque,
     int Defensa,
-    ClasePersonaje Clase);
+    ClasePersonaje Clase,
+    int NivelMaximo,
+    Dificultad DificultadDesbloqueada);

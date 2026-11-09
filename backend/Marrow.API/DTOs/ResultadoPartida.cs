@@ -2,6 +2,10 @@ using Marrow.API.Models;
 
 namespace Marrow.API.DTOs;
 
+public sealed record CrearPartidaResult(
+    PartidaResponse? Partida,
+    bool DificultadBloqueada);
+
 public sealed record MovimientoPartidaResult(
     EstadoPartidaResponse Estado,
     bool ConcurrenciaPerdida);
@@ -14,7 +18,8 @@ public enum RechazoAtaque
 {
     PartidaNoActiva,
     FueraDeAlcance,
-    EstadoObsoleto
+    EstadoObsoleto,
+    HabilidadBloqueada
 }
 
 public sealed record AtaquePartidaResult(

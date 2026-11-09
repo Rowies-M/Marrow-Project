@@ -29,6 +29,15 @@ public class PersonajeRepository(MarrowDbContext context) : IPersonajeRepository
         return personaje;
     }
 
+    // La condición va en la misma sentencia: la base borra en cascada las partidas de un personaje,
+    // y eso destruiría su historial.
+    public Task<int> EliminarSinPartidasAsync(int id, int usuarioId, CancellationToken cancellationToken = default) =>
+        context.Personajes
+            .Where(personaje => personaje.Id == id
+                && personaje.UsuarioId == usuarioId
+                && !context.Partidas.Any(partida => partida.PersonajeId == personaje.Id))
+            .ExecuteDeleteAsync(cancellationToken);
+
     public async Task<Personaje> ActualizarAsync(Personaje personaje, CancellationToken cancellationToken = default)
     {
         // Solo se escribe el nombre: las estadísticas y el progreso los controla el combate.

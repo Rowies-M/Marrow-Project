@@ -4,13 +4,14 @@ namespace Marrow.API.Interfaces;
 
 public interface IPartidaService
 {
-    Task<PartidaResponse?> CrearAsync(
+    Task<CrearPartidaResult?> CrearAsync(
         int usuarioId,
         CrearPartidaRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<PartidaResponse>> ObtenerPorUsuarioAsync(
+    Task<PaginaPartidasResponse> ObtenerPorUsuarioAsync(
         int usuarioId,
+        ConsultaPartidasRequest consulta,
         CancellationToken cancellationToken = default);
 
     Task<PartidaResponse?> ObtenerPorIdAsync(
@@ -35,6 +36,11 @@ public interface IPartidaService
         CancellationToken cancellationToken = default);
 
     Task<AtaquePartidaResult?> AtacarAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default);
+
+    Task<AtaquePartidaResult?> UsarGolpePoderosoAsync(
         int usuarioId,
         int partidaId,
         CancellationToken cancellationToken = default);

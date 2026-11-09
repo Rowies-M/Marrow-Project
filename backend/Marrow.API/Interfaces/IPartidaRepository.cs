@@ -14,8 +14,13 @@ public interface IPartidaRepository
         int usuarioId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
+    Task<(IReadOnlyList<Partida> Partidas, int Total)> ObtenerPorUsuarioAsync(
         int usuarioId,
+        EstadoPartida? estado,
+        Dificultad? dificultad,
+        bool ascendente,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default);

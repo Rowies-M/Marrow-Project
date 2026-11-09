@@ -7,15 +7,15 @@ namespace Marrow.API.Services;
 public sealed class PartidaService(
     IPartidaRepository partidaRepository,
     IPersonajeRepository personajeRepository,
-    IEnemigoRepository enemigoRepository) : IPartidaService
+    IEnemigoRepository enemigoRepository,
+    ILogger<PartidaService> logger) : IPartidaService
 {
-    private const int EnemigoInicialId = 1;
     private const int PersonajeXInicial = 1;
     private const int PersonajeYInicial = 1;
     private const int EnemigoXInicial = 5;
     private const int EnemigoYInicial = 3;
 
-    public async Task<PartidaResponse?> CrearAsync(
+    public async Task<CrearPartidaResult?> CrearAsync(
         int usuarioId,
         CrearPartidaRequest request,
         CancellationToken cancellationToken = default)
@@ -34,17 +34,24 @@ public sealed class PartidaService(
             return null;
         }
 
-        var enemigo = await enemigoRepository.ObtenerPorIdAsync(EnemigoInicialId, cancellationToken)
-            ?? throw new InvalidOperationException("El enemigo inicial no existe.");
+        // Esta validación es la que decide: el selector del frontend solo es una ayuda visual.
+        if (!ReglasCombate.DificultadDisponible(request.Dificultad, personaje.DificultadDesbloqueada))
+        {
+            return new CrearPartidaResult(null, DificultadBloqueada: true);
+        }
 
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(personaje.DificultadDesbloqueada);
+        var nivelEnemigo = ReglasProgresion.NivelDeEnemigo(personaje.Nivel);
+        var enemigo = await enemigoRepository.ObtenerPorNivelAsync(nivelEnemigo, cancellationToken)
+            ?? throw new InvalidOperationException($"No existe un enemigo de nivel {nivelEnemigo}.");
+
+        var estadisticas = ReglasCombate.ObtenerEstadisticas(request.Dificultad, personaje, enemigo);
         var ahora = DateTime.UtcNow;
         var partida = new Partida
         {
             FechaCreacion = ahora,
             FechaUltimaActualizacion = ahora,
             Estado = EstadoPartida.Activa,
-            Dificultad = personaje.DificultadDesbloqueada,
+            Dificultad = request.Dificultad,
             PersonajeId = personaje.Id,
             EnemigoId = enemigo.Id,
             VidaPersonajeActual = estadisticas.VidaJugador,
@@ -56,16 +63,38 @@ public sealed class PartidaService(
         };
 
         var partidaCreada = await partidaRepository.CrearAsync(partida, cancellationToken);
-        return MapearRespuesta(partidaCreada);
+        logger.LogInformation(
+            "Partida {PartidaId} creada para el personaje {PersonajeId} en dificultad {Dificultad}.",
+            partidaCreada.Id,
+            partidaCreada.PersonajeId,
+            partidaCreada.Dificultad);
+
+        return new CrearPartidaResult(MapearRespuesta(partidaCreada), DificultadBloqueada: false);
     }
 
-    public async Task<IReadOnlyList<PartidaResponse>> ObtenerPorUsuarioAsync(
+    public async Task<PaginaPartidasResponse> ObtenerPorUsuarioAsync(
         int usuarioId,
+        ConsultaPartidasRequest consulta,
         CancellationToken cancellationToken = default)
     {
         ValidarId(usuarioId, nameof(usuarioId));
-        var partidas = await partidaRepository.ObtenerPorUsuarioAsync(usuarioId, cancellationToken);
-        return partidas.Select(MapearRespuesta).ToList();
+        ArgumentNullException.ThrowIfNull(consulta);
+
+        var (partidas, total) = await partidaRepository.ObtenerPorUsuarioAsync(
+            usuarioId,
+            consulta.Estado,
+            consulta.Dificultad,
+            consulta.Orden == "asc",
+            consulta.Page,
+            consulta.PageSize,
+            cancellationToken);
+
+        return new PaginaPartidasResponse(
+            partidas.Select(MapearRespuesta).ToList(),
+            consulta.Page,
+            consulta.PageSize,
+            total,
+            (int)Math.Ceiling(total / (double)consulta.PageSize));
     }
 
     public async Task<PartidaResponse?> ObtenerPorIdAsync(
@@ -140,6 +169,11 @@ public sealed class PartidaService(
             partidaId,
             usuarioId,
             cancellationToken);
+        if (filasActualizadas > 0)
+        {
+            logger.LogInformation("Partida {PartidaId} abandonada.", partidaId);
+        }
+
         var partida = await partidaRepository.ObtenerPorIdAsync(partidaId, usuarioId, cancellationToken);
         if (partida is null)
         {
@@ -151,10 +185,23 @@ public sealed class PartidaService(
         return new FinalizacionPartidaResult(MapearRespuesta(partida), filasActualizadas == 0);
     }
 
-    public async Task<AtaquePartidaResult?> AtacarAsync(
+    public Task<AtaquePartidaResult?> AtacarAsync(
         int usuarioId,
         int partidaId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        EjecutarAtaqueAsync(usuarioId, partidaId, golpePoderoso: false, cancellationToken);
+
+    public Task<AtaquePartidaResult?> UsarGolpePoderosoAsync(
+        int usuarioId,
+        int partidaId,
+        CancellationToken cancellationToken = default) =>
+        EjecutarAtaqueAsync(usuarioId, partidaId, golpePoderoso: true, cancellationToken);
+
+    private async Task<AtaquePartidaResult?> EjecutarAtaqueAsync(
+        int usuarioId,
+        int partidaId,
+        bool golpePoderoso,
+        CancellationToken cancellationToken)
     {
         ValidarId(usuarioId, nameof(usuarioId));
         ValidarId(partidaId, nameof(partidaId));
@@ -171,14 +218,24 @@ public sealed class PartidaService(
             return new AtaquePartidaResult(null, rechazo);
         }
 
+        // Esta validación es la que decide: el estado del botón en el frontend solo es una ayuda visual.
+        if (golpePoderoso && !ReglasCombate.GolpePoderosoDesbloqueado(leida.Personaje.Nivel))
+        {
+            return new AtaquePartidaResult(null, RechazoAtaque.HabilidadBloqueada);
+        }
+
         var resolucion = ReglasCombate.ResolverAtaque(
-            leida.Dificultad,
+            ReglasCombate.ObtenerEstadisticas(leida.Dificultad, leida.Personaje, leida.Enemigo),
             leida.VidaPersonajeActual,
-            leida.VidaEnemigoActual);
+            leida.VidaEnemigoActual,
+            golpePoderoso);
         var desbloquearDificil = resolucion.Resultado is { } resultado
             && ReglasCombate.DesbloqueaDificil(leida.Dificultad, resultado);
         var progreso = resolucion.Resultado == ResultadoCombate.Victoria
-            ? ReglasProgresion.AplicarVictoria(leida.Personaje.Nivel, leida.Personaje.Experiencia)
+            ? ReglasProgresion.AplicarVictoria(
+                leida.Personaje.Nivel,
+                leida.Personaje.Experiencia,
+                leida.Enemigo.ExperienciaOtorgada)
             : null;
 
         var filasActualizadas = await partidaRepository.AplicarAtaqueAsync(
@@ -199,6 +256,16 @@ public sealed class PartidaService(
                 : new AtaquePartidaResult(null, ClasificarRechazo(actual) ?? RechazoAtaque.EstadoObsoleto);
         }
 
+        if (resolucion.Resultado is not null)
+        {
+            logger.LogInformation("Partida {PartidaId} finalizada con resultado {Resultado}.", partidaId, resolucion.Resultado);
+        }
+
+        if (progreso is not null && progreso.Nivel > leida.Personaje.Nivel)
+        {
+            logger.LogInformation("Personaje {PersonajeId} subió al nivel {Nivel}.", leida.PersonajeId, progreso.Nivel);
+        }
+
         if (actual is null)
         {
             throw new InvalidOperationException("La partida atacada no se pudo leer después de actualizarla.");
@@ -209,7 +276,7 @@ public sealed class PartidaService(
                 MapearEstado(actual),
                 resolucion.DanioInfligido,
                 resolucion.DanioRecibido,
-                progreso is null ? 0 : ReglasProgresion.ExperienciaPorVictoria),
+                progreso is null ? 0 : leida.Enemigo.ExperienciaOtorgada),
             null);
     }
 
@@ -232,29 +299,37 @@ public sealed class PartidaService(
         partida.Estado,
         partida.PersonajeId);
 
-    private static EstadoPartidaResponse MapearEstado(Partida partida) => new(
-        partida.Id,
-        new DateTimeOffset(DateTime.SpecifyKind(partida.FechaCreacion, DateTimeKind.Utc)),
-        new DateTimeOffset(DateTime.SpecifyKind(partida.FechaUltimaActualizacion, DateTimeKind.Utc)),
-        partida.Estado,
-        partida.PersonajeId,
-        partida.Personaje.Nombre,
-        partida.Personaje.Nivel,
-        partida.Personaje.Experiencia,
-        ReglasProgresion.ExperienciaParaSubir(partida.Personaje.Nivel),
-        partida.VidaPersonajeActual,
-        ReglasCombate.ObtenerEstadisticas(partida.Dificultad).VidaJugador,
-        partida.PersonajeX,
-        partida.PersonajeY,
-        partida.EnemigoId,
-        partida.Enemigo.Nombre,
-        partida.Enemigo.Nivel,
-        partida.VidaEnemigoActual,
-        ReglasCombate.ObtenerEstadisticas(partida.Dificultad).VidaEnemigo,
-        partida.EnemigoX,
-        partida.EnemigoY,
-        partida.Dificultad,
-        partida.ResultadoCombate);
+    private static EstadoPartidaResponse MapearEstado(Partida partida)
+    {
+        var estadisticas = ReglasCombate.ObtenerEstadisticas(partida.Dificultad, partida.Personaje, partida.Enemigo);
+
+        return new EstadoPartidaResponse(
+            partida.Id,
+            new DateTimeOffset(DateTime.SpecifyKind(partida.FechaCreacion, DateTimeKind.Utc)),
+            new DateTimeOffset(DateTime.SpecifyKind(partida.FechaUltimaActualizacion, DateTimeKind.Utc)),
+            partida.Estado,
+            partida.PersonajeId,
+            partida.Personaje.Nombre,
+            partida.Personaje.Nivel,
+            partida.Personaje.Experiencia,
+            ReglasProgresion.NivelMaximo,
+            ReglasProgresion.ExperienciaSiguienteNivel(partida.Personaje.Nivel),
+            partida.VidaPersonajeActual,
+            estadisticas.VidaJugador,
+            partida.PersonajeX,
+            partida.PersonajeY,
+            partida.EnemigoId,
+            partida.Enemigo.Nombre,
+            partida.Enemigo.Nivel,
+            partida.VidaEnemigoActual,
+            estadisticas.VidaEnemigo,
+            partida.EnemigoX,
+            partida.EnemigoY,
+            partida.Dificultad,
+            partida.ResultadoCombate,
+            ReglasCombate.GolpePoderosoDesbloqueado(partida.Personaje.Nivel),
+            ReglasCombate.NivelGolpePoderoso);
+    }
 
     private static void ValidarId(int id, string parameterName)
     {

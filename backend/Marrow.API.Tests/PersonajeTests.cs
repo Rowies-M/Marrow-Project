@@ -239,6 +239,39 @@ public class PersonajeTests
     }
 
     [Fact]
+    public async Task Eliminar_SinPartidas_EliminaElPersonajeDelUsuario()
+    {
+        var repositorio = new PersonajeRepositoryFalso { FilasEliminadas = 1 };
+        var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
+
+        var resultado = await servicio.EliminarAsync(UsuarioId, PersonajeId);
+
+        Assert.Equal(ResultadoEliminacionPersonaje.Eliminado, resultado);
+        Assert.Equal((PersonajeId, UsuarioId), repositorio.UltimaEliminacion);
+    }
+
+    [Fact]
+    public async Task Eliminar_ConPartidas_InformaQueNoSePuedeEliminar()
+    {
+        var repositorio = new PersonajeRepositoryFalso { Existente = CrearExistente() };
+        var servicio = new PersonajeService(repositorio, new UsuarioRepositoryFalso());
+
+        var resultado = await servicio.EliminarAsync(UsuarioId, PersonajeId);
+
+        Assert.Equal(ResultadoEliminacionPersonaje.TienePartidas, resultado);
+    }
+
+    [Fact]
+    public async Task Eliminar_PersonajeInexistenteOAjeno_InformaQueNoExiste()
+    {
+        var servicio = new PersonajeService(new PersonajeRepositoryFalso(), new UsuarioRepositoryFalso());
+
+        var resultado = await servicio.EliminarAsync(UsuarioId, PersonajeId);
+
+        Assert.Equal(ResultadoEliminacionPersonaje.NoEncontrado, resultado);
+    }
+
+    [Fact]
     public async Task RepositorioActualizar_SoloEscribeElNombre()
     {
         var interceptor = new GuardadoInterceptado();
@@ -353,22 +386,21 @@ public class PersonajeTests
             Guardado = personaje;
             return Task.FromResult(personaje);
         }
+
+        public int FilasEliminadas { get; init; }
+
+        public (int Id, int UsuarioId)? UltimaEliminacion { get; private set; }
+
+        public Task<int> EliminarSinPartidasAsync(int id, int usuarioId, CancellationToken cancellationToken = default)
+        {
+            UltimaEliminacion = (id, usuarioId);
+            return Task.FromResult(FilasEliminadas);
+        }
     }
 
     private sealed class UsuarioRepositoryFalso : IUsuarioRepository
     {
         public Task<Usuario?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Usuario?>(new Usuario { Id = id });
-
-        public Task<Usuario?> ObtenerPorNombreUsuarioAsync(
-            string nombreUsuario,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<Usuario?> ObtenerPorEmailAsync(string email, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

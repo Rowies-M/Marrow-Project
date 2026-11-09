@@ -1,3 +1,4 @@
+using Marrow.API.Data;
 using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
@@ -8,9 +9,7 @@ public sealed class PersonajeService(
     IPersonajeRepository personajeRepository,
     IUsuarioRepository usuarioRepository) : IPersonajeService
 {
-    private const int NivelInicial = 1;
     private const int ExperienciaInicial = 0;
-    private const int DefensaInicial = 5;
 
     public async Task<PersonajeResponse> CrearAsync(
         int usuarioId,
@@ -22,16 +21,15 @@ public sealed class PersonajeService(
         ValidarNombre(request.Nombre);
         await ValidarUsuarioAsync(usuarioId, cancellationToken);
 
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(Dificultad.Normal);
         var personaje = new Personaje
         {
             Nombre = request.Nombre.Trim(),
-            Nivel = NivelInicial,
+            Nivel = ReglasProgresion.NivelMinimo,
             Experiencia = ExperienciaInicial,
-            VidaActual = estadisticas.VidaJugador,
-            VidaMaxima = estadisticas.VidaJugador,
-            Ataque = estadisticas.DanioJugador,
-            Defensa = DefensaInicial,
+            VidaActual = DatosIniciales.VidaInicialPersonaje,
+            VidaMaxima = DatosIniciales.VidaInicialPersonaje,
+            Ataque = DatosIniciales.AtaqueInicialPersonaje,
+            Defensa = DatosIniciales.DefensaInicialPersonaje,
             Clase = ClasePersonaje.Guerrero,
             DificultadDesbloqueada = Dificultad.Normal,
             UsuarioId = usuarioId
@@ -85,6 +83,26 @@ public sealed class PersonajeService(
         return MapearRespuesta(personajeActualizado);
     }
 
+    public async Task<ResultadoEliminacionPersonaje> EliminarAsync(
+        int usuarioId,
+        int personajeId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidarId(usuarioId, nameof(usuarioId));
+        ValidarId(personajeId, nameof(personajeId));
+
+        var filasEliminadas = await personajeRepository.EliminarSinPartidasAsync(personajeId, usuarioId, cancellationToken);
+        if (filasEliminadas > 0)
+        {
+            return ResultadoEliminacionPersonaje.Eliminado;
+        }
+
+        var personaje = await personajeRepository.ObtenerPorIdAsync(personajeId, usuarioId, cancellationToken);
+        return personaje is null
+            ? ResultadoEliminacionPersonaje.NoEncontrado
+            : ResultadoEliminacionPersonaje.TienePartidas;
+    }
+
     private async Task ValidarUsuarioAsync(int usuarioId, CancellationToken cancellationToken)
     {
         if (await usuarioRepository.ObtenerPorIdAsync(usuarioId, cancellationToken) is null)
@@ -102,7 +120,9 @@ public sealed class PersonajeService(
         personaje.VidaMaxima,
         personaje.Ataque,
         personaje.Defensa,
-        personaje.Clase);
+        personaje.Clase,
+        ReglasProgresion.NivelMaximo,
+        personaje.DificultadDesbloqueada);
 
     private static void ValidarNombre(string nombre)
     {

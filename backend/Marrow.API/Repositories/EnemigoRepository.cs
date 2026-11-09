@@ -10,6 +10,11 @@ public class EnemigoRepository(MarrowDbContext context) : IEnemigoRepository
     public Task<Enemigo?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
         context.Enemigos.AsNoTracking().FirstOrDefaultAsync(enemigo => enemigo.Id == id, cancellationToken);
 
+    public Task<Enemigo?> ObtenerPorNivelAsync(int nivel, CancellationToken cancellationToken = default) =>
+        context.Enemigos.AsNoTracking()
+            .OrderBy(enemigo => enemigo.Id)
+            .FirstOrDefaultAsync(enemigo => enemigo.Nivel == nivel, cancellationToken);
+
     public async Task<IReadOnlyList<Enemigo>> ObtenerTodosAsync(CancellationToken cancellationToken = default) =>
         await context.Enemigos.AsNoTracking().OrderBy(enemigo => enemigo.Id).ToListAsync(cancellationToken);
 

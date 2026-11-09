@@ -1,6 +1,9 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Marrow.API.Data;
 using Marrow.API.IntegrationTests.Infraestructura;
+using Marrow.API.Interfaces;
 using Marrow.API.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -47,6 +50,57 @@ public class ArquitecturaFabricaTests
         var opciones = fabrica.Services.GetRequiredService<IOptions<JsonOptions>>().Value.JsonSerializerOptions;
 
         Assert.Equal($"\"{esperado}\"", JsonSerializer.Serialize(valor, valor.GetType(), opciones));
+    }
+
+    // Los parámetros inválidos se rechazan antes de llegar al repositorio, así que ninguna petición abre una conexión.
+    [Theory]
+    [InlineData("page=0")]
+    [InlineData("page=1000001")]
+    [InlineData("page=texto")]
+    [InlineData("pageSize=0")]
+    [InlineData("pageSize=51")]
+    [InlineData("orden=otro")]
+    [InlineData("estado=Inventado")]
+    [InlineData("estado=99")]
+    [InlineData("dificultad=Inventada")]
+    [InlineData("dificultad=99")]
+    public async Task ListadoDePartidas_ParametroInvalido_Responde400(string parametro)
+    {
+        await using var fabrica = FabricaMarrow.CrearSinBaseParaPruebas();
+        var token = fabrica.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(new Usuario { Id = 1, NombreUsuario = "prueba", Email = "prueba@example.test" }, [RolesUsuario.Jugador]);
+        var cliente = fabrica.CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+        var respuesta = await cliente.GetAsync($"/api/partidas?{parametro}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/partidas")]
+    [InlineData("/api/personajes")]
+    public async Task EndpointsDeJuego_TokenSinRolJugador_Responde403(string ruta)
+    {
+        await using var fabrica = FabricaMarrow.CrearSinBaseParaPruebas();
+        var token = fabrica.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(new Usuario { Id = 1, NombreUsuario = "prueba", Email = "prueba@example.test" }, [RolesUsuario.Administrador]);
+        var cliente = fabrica.CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+        var respuesta = await cliente.GetAsync(ruta);
+
+        Assert.Equal(HttpStatusCode.Forbidden, respuesta.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListadoDePartidas_SinToken_Responde401()
+    {
+        await using var fabrica = FabricaMarrow.CrearSinBaseParaPruebas();
+
+        var respuesta = await fabrica.CreateClient().GetAsync("/api/partidas");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, respuesta.StatusCode);
     }
 
     [Fact]

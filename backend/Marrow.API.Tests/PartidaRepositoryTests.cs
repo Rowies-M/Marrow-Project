@@ -7,6 +7,7 @@ using Marrow.API.Models;
 using Marrow.API.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 
 namespace Marrow.API.Tests;
@@ -266,7 +267,7 @@ public class PartidaRepositoryTests
     [Fact]
     public async Task AplicarAtaque_SinProgreso_NoEscribeNivelNiExperiencia()
     {
-        var (comandos, _) = await EjecutarAtaqueAsync(desbloquearDificil: true);
+        var (comandos, _) = await EjecutarAtaqueAsync();
 
         Assert.All(comandos.Sql, sql =>
         {
@@ -382,7 +383,7 @@ public class PartidaRepositoryTests
             var esPersonaje = command.CommandText.Contains("UPDATE \"Personajes\"");
             if (esPersonaje && FallarPersonaje)
             {
-                throw new InvalidOperationException("Falla simulada del desbloqueo.");
+                throw new InvalidOperationException("Falla simulada del personaje.");
             }
 
             return ValueTask.FromResult(
@@ -512,6 +513,177 @@ public class PartidaRepositoryTests
             throw new NotSupportedException();
     }
 
+    [Fact]
+    public async Task Listar_SiempreFiltraPorUsuarioYNoCargaRelaciones()
+    {
+        var (consulta, conteo, _) = await EjecutarListadoAsync();
+
+        foreach (var sql in new[] { consulta.Texto, conteo.Texto })
+        {
+            Assert.Contains("\"UsuarioId\" = @usuarioId", sql);
+        }
+
+        Assert.Equal(42, consulta.Parametros["usuarioId"]);
+        Assert.Equal(42, conteo.Parametros["usuarioId"]);
+        var columnas = consulta.Texto[..consulta.Texto.IndexOf("FROM", StringComparison.Ordinal)];
+        Assert.DoesNotContain("\"Nombre\"", columnas);
+        Assert.DoesNotContain("Enemigos", consulta.Texto);
+    }
+
+    [Fact]
+    public async Task Listar_SinFiltros_NoRestringeEstadoNiDificultad()
+    {
+        var (consulta, conteo, _) = await EjecutarListadoAsync();
+
+        foreach (var sql in new[] { consulta.Texto, conteo.Texto })
+        {
+            var where = sql[sql.IndexOf("WHERE", StringComparison.Ordinal)..];
+            Assert.DoesNotContain("\"Estado\" =", where);
+            Assert.DoesNotContain("\"Dificultad\" =", where);
+        }
+    }
+
+    [Fact]
+    public async Task Listar_ConFiltros_LosAplicaALosResultadosYAlTotal()
+    {
+        var (consulta, conteo, _) = await EjecutarListadoAsync(EstadoPartida.Finalizada, Dificultad.Dificil);
+
+        foreach (var sql in new[] { consulta.Texto, conteo.Texto })
+        {
+            var where = sql[sql.IndexOf("WHERE", StringComparison.Ordinal)..];
+            Assert.Contains("p.\"Estado\" = @estado", where);
+            Assert.Contains("p.\"Dificultad\" = @dificultad", where);
+        }
+
+        Assert.Equal(1, Convert.ToInt32(consulta.Parametros["estado"]));
+        Assert.Equal(1, Convert.ToInt32(consulta.Parametros["dificultad"]));
+    }
+
+    [Theory]
+    [InlineData(false, "ORDER BY p.\"FechaCreacion\" DESC, p.\"Id\" DESC")]
+    [InlineData(true, "ORDER BY p.\"FechaCreacion\", p.\"Id\"")]
+    public async Task Listar_OrdenaPorFechaDeCreacionConDesempate(bool ascendente, string orden)
+    {
+        var (consulta, _, _) = await EjecutarListadoAsync(ascendente: ascendente);
+
+        Assert.Contains(orden, consulta.Texto);
+    }
+
+    [Theory]
+    [InlineData(1, 10, 0)]
+    [InlineData(3, 10, 20)]
+    [InlineData(2, 50, 50)]
+    public async Task Listar_PaginaConLimitYOffset(int page, int pageSize, int saltoEsperado)
+    {
+        var (consulta, _, _) = await EjecutarListadoAsync(page: page, pageSize: pageSize);
+
+        var limite = Regex.Match(consulta.Texto, "LIMIT @(\\w+) OFFSET @(\\w+)");
+        Assert.True(limite.Success, consulta.Texto);
+        Assert.Equal(pageSize, consulta.Parametros[limite.Groups[1].Value]);
+        Assert.Equal(saltoEsperado, consulta.Parametros[limite.Groups[2].Value]);
+    }
+
+    [Fact]
+    public async Task Listar_DevuelveElTotalDeLaConsultaDeConteo()
+    {
+        var (_, _, total) = await EjecutarListadoAsync();
+
+        Assert.Equal(37, total);
+    }
+
+    private static async Task<(ComandoDeLectura Consulta, ComandoDeLectura Conteo, int Total)> EjecutarListadoAsync(
+        EstadoPartida? estado = null,
+        Dificultad? dificultad = null,
+        bool ascendente = false,
+        int page = 1,
+        int pageSize = 10)
+    {
+        var lecturas = new LecturasInterceptadas();
+        await using var context = new MarrowDbContext(new DbContextOptionsBuilder<MarrowDbContext>()
+            .UseNpgsql(ConexionInexistente)
+            .AddInterceptors(new AperturaSuprimida(), lecturas)
+            .Options);
+
+        var (_, total) = await new PartidaRepository(context).ObtenerPorUsuarioAsync(42, estado, dificultad, ascendente, page, pageSize);
+
+        return (Assert.Single(lecturas.Comandos, comando => !EsConteo(comando.Texto)),
+            Assert.Single(lecturas.Comandos, comando => EsConteo(comando.Texto)),
+            total);
+    }
+
+    private static bool EsConteo(string sql) => sql.Contains("COUNT(", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record ComandoDeLectura(string Texto, Dictionary<string, object?> Parametros);
+
+    // Responde sin ir a la base: el conteo devuelve 37 y la consulta, ninguna fila.
+    private sealed class LecturasInterceptadas : DbCommandInterceptor
+    {
+        public List<ComandoDeLectura> Comandos { get; } = [];
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Comandos.Add(new ComandoDeLectura(
+                command.CommandText,
+                command.Parameters.Cast<DbParameter>().ToDictionary(parametro => parametro.ParameterName.TrimStart('@'), parametro => parametro.Value)));
+
+            var tabla = new DataTable();
+            if (EsConteo(command.CommandText))
+            {
+                tabla.Columns.Add("total", typeof(int));
+                tabla.Rows.Add(37);
+            }
+
+            return ValueTask.FromResult(InterceptionResult<DbDataReader>.SuppressWithResult(tabla.CreateDataReader()));
+        }
+    }
+
+    [Fact]
+    public async Task EliminarPersonaje_ExigeUsuarioYQueNoTengaPartidasEnLaMismaSentencia()
+    {
+        var comando = new ComandoInterceptado();
+        await using var context = new MarrowDbContext(new DbContextOptionsBuilder<MarrowDbContext>()
+            .UseNpgsql(ConexionInexistente)
+            .AddInterceptors(new AperturaSuprimida(), comando)
+            .Options);
+
+        var filas = await new PersonajeRepository(context).EliminarSinPartidasAsync(7, 42);
+
+        Assert.Equal(1, filas);
+        Assert.NotNull(comando.Sql);
+        Assert.Contains("DELETE FROM \"Personajes\"", comando.Sql);
+        Assert.Contains("\"UsuarioId\" = @usuarioId", comando.Sql);
+        Assert.Contains("NOT", comando.Sql);
+        Assert.Contains("EXISTS", comando.Sql);
+        Assert.Contains("\"Partidas\"", comando.Sql);
+    }
+
+    [Theory]
+    [InlineData("p.\"Nivel\" > 3", "\"Nivel\"")]
+    [InlineData("p.\"Nivel\" < 1", "\"Nivel\"")]
+    [InlineData("p.\"Experiencia\" < 0", "\"Experiencia\"")]
+    [InlineData("p.\"VidaMaxima\" <= 0", "\"VidaMaxima\"")]
+    [InlineData("p.\"Ataque\" <= 0", "\"Ataque\"")]
+    [InlineData("p.\"Defensa\" < 0", "\"Defensa\"")]
+    public async Task NormalizarPersonajes_SoloCorrigeLosValoresInvalidos(string condicion, string columna)
+    {
+        var comando = new ComandoInterceptado();
+        await using var context = new MarrowDbContext(new DbContextOptionsBuilder<MarrowDbContext>()
+            .UseNpgsql(ConexionInexistente)
+            .AddInterceptors(new AperturaSuprimida(), comando)
+            .Options);
+
+        await InicializadorDatos.NormalizarPersonajesAsync(context, NullLogger.Instance);
+
+        Assert.Equal(6, comando.Todos.Count);
+        Assert.All(comando.Todos, sql => Assert.StartsWith("UPDATE \"Personajes\"", sql));
+        var sentencia = Assert.Single(comando.Todos, sql => sql.Contains(condicion));
+        Assert.Contains($"{columna} =", sentencia);
+    }
+
     private static async Task<string> CapturarSqlDeMoverAsync()
     {
         var comando = new ComandoInterceptado();
@@ -547,6 +719,8 @@ public class PartidaRepositoryTests
     {
         public string? Sql { get; private set; }
 
+        public List<string> Todos { get; } = [];
+
         public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
             DbCommand command,
             CommandEventData eventData,
@@ -554,6 +728,7 @@ public class PartidaRepositoryTests
             CancellationToken cancellationToken = default)
         {
             Sql = command.CommandText;
+            Todos.Add(command.CommandText);
             return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(1));
         }
     }

@@ -1,14 +1,15 @@
+using Microsoft.AspNetCore.Identity;
+
 namespace Marrow.API.Models;
 
-public class Usuario
+public class Usuario : IdentityUser<int>
 {
-    public int Id { get; set; }
-
-    public string NombreUsuario { get; set; } = string.Empty;
-
-    public string Email { get; set; } = string.Empty;
-
-    public string PasswordHash { get; set; } = string.Empty;
+    // Alias de UserName: el dato se guarda una sola vez, en la columna NombreUsuario.
+    public string NombreUsuario
+    {
+        get => UserName ?? string.Empty;
+        set => UserName = value;
+    }
 
     public DateTime FechaCreacion { get; set; }
 }

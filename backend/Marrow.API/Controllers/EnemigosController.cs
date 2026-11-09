@@ -1,17 +1,22 @@
 using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Marrow.API.Controllers;
 
+/// <summary>Consulta pública de los enemigos del juego, de solo lectura. No requiere token.</summary>
 [ApiController]
+[AllowAnonymous]
 [Route("api/enemigos")]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 public class EnemigosController(IEnemigoService enemigoService) : ControllerBase
 {
     /// <summary>
     /// Obtiene todos los enemigos disponibles.
     /// </summary>
+    /// <response code="200">Lista de enemigos.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<EnemigoResponseDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken)
@@ -25,6 +30,10 @@ public class EnemigosController(IEnemigoService enemigoService) : ControllerBase
     /// <summary>
     /// Obtiene un enemigo por su identificador.
     /// </summary>
+    /// <param name="id">Identificador del enemigo.</param>
+    /// <param name="cancellationToken">Cancelación del pedido.</param>
+    /// <response code="200">Enemigo encontrado.</response>
+    /// <response code="404">El enemigo no existe.</response>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(EnemigoResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -1,7 +1,9 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Marrow.API.Controllers;
+using Marrow.API.Data;
 using Marrow.API.DTOs;
 using Marrow.API.Interfaces;
 using Marrow.API.Models;
@@ -9,6 +11,7 @@ using Marrow.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Marrow.API.Tests;
 
@@ -223,7 +226,7 @@ public class PartidaServiceTests
     [Theory]
     [InlineData(Dificultad.Normal)]
     [InlineData(Dificultad.Dificil)]
-    public async Task Crear_CopiaLaDificultadDelPersonajeSinResultadoDeCombate(Dificultad dificultad)
+    public async Task Crear_UsaLaDificultadElegidaSinResultadoDeCombate(Dificultad dificultad)
     {
         var repositorio = new PartidaRepositoryFalso(null);
         var personajes = new PersonajeRepositoryFalso(new Personaje
@@ -232,9 +235,9 @@ public class PartidaServiceTests
             UsuarioId = UsuarioId,
             DificultadDesbloqueada = dificultad
         });
-        var servicio = new PartidaService(repositorio, personajes, new EnemigoRepositoryFalso());
+        var servicio = new PartidaService(repositorio, personajes, new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
 
-        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3, Dificultad = dificultad });
 
         Assert.NotNull(repositorio.Creada);
         Assert.Equal(dificultad, repositorio.Creada.Dificultad);
@@ -255,7 +258,7 @@ public class PartidaServiceTests
         var servicio = new PartidaService(
             repositorio,
             new PersonajeRepositoryFalso(personaje),
-            new EnemigoRepositoryFalso());
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
 
         await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
         personaje.DificultadDesbloqueada = Dificultad.Dificil;
@@ -265,13 +268,12 @@ public class PartidaServiceTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 100, 100, 40)]
-    [InlineData(Dificultad.Normal, 1, 500, 40)]
-    [InlineData(Dificultad.Dificil, 100, 100, 80)]
-    [InlineData(Dificultad.Dificil, 1, 500, 80)]
-    public async Task Crear_InicializaLasVidasSinUsarLasEstadisticasDelPersonaje(
+    [InlineData(Dificultad.Normal, 80, 30)]
+    [InlineData(Dificultad.Normal, 500, 30)]
+    [InlineData(Dificultad.Dificil, 80, 60)]
+    [InlineData(Dificultad.Dificil, 500, 60)]
+    public async Task Crear_InicializaLasVidasConElPersonajeYElCatalogo(
         Dificultad dificultad,
-        int vidaActualPersonaje,
         int vidaMaximaPersonaje,
         int vidaEnemigoEsperada)
     {
@@ -282,28 +284,28 @@ public class PartidaServiceTests
             {
                 Id = 3,
                 UsuarioId = UsuarioId,
-                VidaActual = vidaActualPersonaje,
+                VidaActual = 1,
                 VidaMaxima = vidaMaximaPersonaje,
                 Ataque = 10,
                 DificultadDesbloqueada = dificultad
             }),
-            new EnemigoRepositoryFalso());
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
 
-        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3, Dificultad = dificultad });
 
         Assert.NotNull(repositorio.Creada);
-        Assert.Equal(80, repositorio.Creada.VidaPersonajeActual);
+        Assert.Equal(vidaMaximaPersonaje, repositorio.Creada.VidaPersonajeActual);
         Assert.Equal(vidaEnemigoEsperada, repositorio.Creada.VidaEnemigoActual);
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 30, 40)]
-    [InlineData(Dificultad.Normal, 999, 40)]
-    [InlineData(Dificultad.Dificil, 30, 80)]
-    [InlineData(Dificultad.Dificil, 999, 80)]
-    public async Task Crear_NoUsaLasEstadisticasDelGoblinPeroConservaSuIdentidad(
-        Dificultad dificultad,
-        int vidaGoblin,
+    [InlineData(1, 1, 30)]
+    [InlineData(2, 2, 45)]
+    [InlineData(3, 3, 80)]
+    [InlineData(4, 3, 80)]
+    public async Task Crear_AsignaElEnemigoSegunElNivelDelPersonaje(
+        int nivelPersonaje,
+        int enemigoEsperado,
         int vidaEnemigoEsperada)
     {
         var repositorio = new PartidaRepositoryFalso(null);
@@ -313,15 +315,100 @@ public class PartidaServiceTests
             {
                 Id = 3,
                 UsuarioId = UsuarioId,
-                DificultadDesbloqueada = dificultad
+                Nivel = nivelPersonaje,
+                DificultadDesbloqueada = Dificultad.Normal
             }),
-            new EnemigoRepositoryFalso(vidaGoblin));
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
 
         await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
 
         Assert.NotNull(repositorio.Creada);
+        Assert.Equal(enemigoEsperado, repositorio.Creada.EnemigoId);
         Assert.Equal(vidaEnemigoEsperada, repositorio.Creada.VidaEnemigoActual);
-        Assert.Equal(1, repositorio.Creada.EnemigoId);
+    }
+
+    [Fact]
+    public void CrearPartidaRequest_NoPermiteElegirElEnemigo()
+    {
+        var propiedades = typeof(CrearPartidaRequest).GetProperties().Select(propiedad => propiedad.Name).Order();
+
+        Assert.Equal(
+            [nameof(CrearPartidaRequest.Dificultad), nameof(CrearPartidaRequest.PersonajeId)],
+            propiedades);
+    }
+
+    [Fact]
+    public void CrearPartidaRequest_LaDificultadPredeterminadaEsNormal()
+    {
+        Assert.Equal(Dificultad.Normal, new CrearPartidaRequest().Dificultad);
+    }
+
+    [Fact]
+    public void CrearPartidaRequest_RechazaUnaDificultadSinDefinir()
+    {
+        var request = new CrearPartidaRequest { PersonajeId = 3, Dificultad = (Dificultad)99 };
+
+        Assert.False(Validator.TryValidateObject(request, new ValidationContext(request), null, validateAllProperties: true));
+    }
+
+    [Fact]
+    public async Task Crear_ConDificilDesbloqueadaYSinElegir_UsaNormal()
+    {
+        var repositorio = new PartidaRepositoryFalso(null);
+        var servicio = new PartidaService(
+            repositorio,
+            new PersonajeRepositoryFalso(new Personaje { Id = 3, UsuarioId = UsuarioId, DificultadDesbloqueada = Dificultad.Dificil }),
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
+
+        await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+
+        Assert.NotNull(repositorio.Creada);
+        Assert.Equal(Dificultad.Normal, repositorio.Creada.Dificultad);
+    }
+
+    [Fact]
+    public async Task Crear_DificilSinDesbloquear_SeRechazaSinCrearLaPartida()
+    {
+        var repositorio = new PartidaRepositoryFalso(null);
+        var servicio = new PartidaService(
+            repositorio,
+            new PersonajeRepositoryFalso(new Personaje { Id = 3, UsuarioId = UsuarioId, DificultadDesbloqueada = Dificultad.Normal }),
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
+
+        var resultado = await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3, Dificultad = Dificultad.Dificil });
+
+        Assert.NotNull(resultado);
+        Assert.True(resultado.DificultadBloqueada);
+        Assert.Null(resultado.Partida);
+        Assert.Null(repositorio.Creada);
+    }
+
+    [Fact]
+    public async Task EndpointCrear_DificilSinDesbloquear_Devuelve409ConMensaje()
+    {
+        var servicio = new PartidaService(
+            new PartidaRepositoryFalso(null),
+            new PersonajeRepositoryFalso(new Personaje { Id = 3, UsuarioId = UsuarioId, DificultadDesbloqueada = Dificultad.Normal }),
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
+        var controlador = CrearControlador(servicio);
+
+        var respuesta = await controlador.Crear(
+            new CrearPartidaRequest { PersonajeId = 3, Dificultad = Dificultad.Dificil },
+            CancellationToken.None);
+
+        VerificarConflicto(respuesta, "Dificultad bloqueada.", "Ganá una partida en Normal para desbloquear Difícil.");
+    }
+
+    [Fact]
+    public async Task Crear_SinEnemigoParaElNivel_LanzaError()
+    {
+        var servicio = new PartidaService(
+            new PartidaRepositoryFalso(null),
+            new PersonajeRepositoryFalso(new Personaje { Id = 3, UsuarioId = UsuarioId, Nivel = 2 }),
+            new EnemigoRepositoryFalso(sinEnemigos: true), NullLogger<PartidaService>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 }));
     }
 
     [Fact]
@@ -342,7 +429,7 @@ public class PartidaServiceTests
         var servicio = new PartidaService(
             new PartidaRepositoryFalso(null),
             new PersonajeRepositoryFalso(personaje),
-            new EnemigoRepositoryFalso());
+            new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance);
 
         await servicio.CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
 
@@ -356,8 +443,8 @@ public class PartidaServiceTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 80, 40)]
-    [InlineData(Dificultad.Dificil, 80, 80)]
+    [InlineData(Dificultad.Normal, 500, 30)]
+    [InlineData(Dificultad.Dificil, 500, 60)]
     public async Task ObtenerEstado_InformaLosMaximosSegunLaDificultadDeLaPartida(
         Dificultad dificultad,
         int vidaMaximaJugador,
@@ -412,8 +499,8 @@ public class PartidaServiceTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 40)]
-    [InlineData(Dificultad.Dificil, 80)]
+    [InlineData(Dificultad.Normal, 30)]
+    [InlineData(Dificultad.Dificil, 60)]
     public async Task PartidaNueva_InformaVidasCompletasDificultadYResultadoNulo(
         Dificultad dificultad,
         int vidaEnemigoEsperada)
@@ -428,8 +515,8 @@ public class PartidaServiceTests
             DificultadDesbloqueada = dificultad
         };
         var creacion = new PartidaRepositoryFalso(null);
-        await new PartidaService(creacion, new PersonajeRepositoryFalso(personaje), new EnemigoRepositoryFalso())
-            .CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3 });
+        await new PartidaService(creacion, new PersonajeRepositoryFalso(personaje), new EnemigoRepositoryFalso(), NullLogger<PartidaService>.Instance)
+            .CrearAsync(UsuarioId, new CrearPartidaRequest { PersonajeId = 3, Dificultad = dificultad });
         var creada = creacion.Creada!;
         creada.Id = PartidaId;
         creada.Personaje = personaje;
@@ -440,8 +527,8 @@ public class PartidaServiceTests
         Assert.NotNull(estado);
         Assert.Equal(dificultad, estado.Dificultad);
         Assert.Null(estado.ResultadoCombate);
-        Assert.Equal(80, estado.VidaPersonajeActual);
-        Assert.Equal(80, estado.VidaPersonajeMaxima);
+        Assert.Equal(100, estado.VidaPersonajeActual);
+        Assert.Equal(100, estado.VidaPersonajeMaxima);
         Assert.Equal(vidaEnemigoEsperada, estado.VidaEnemigoActual);
         Assert.Equal(vidaEnemigoEsperada, estado.VidaEnemigoMaxima);
     }
@@ -476,6 +563,7 @@ public class PartidaServiceTests
             ["personajeNombre"] = JsonValueKind.String,
             ["personajeNivel"] = JsonValueKind.Number,
             ["personajeExperiencia"] = JsonValueKind.Number,
+            ["personajeNivelMaximo"] = JsonValueKind.Number,
             ["personajeExperienciaSiguienteNivel"] = JsonValueKind.Number,
             ["vidaPersonajeActual"] = JsonValueKind.Number,
             ["vidaPersonajeMaxima"] = JsonValueKind.Number,
@@ -489,7 +577,9 @@ public class PartidaServiceTests
             ["enemigoX"] = JsonValueKind.Number,
             ["enemigoY"] = JsonValueKind.Number,
             ["dificultad"] = JsonValueKind.String,
-            ["resultadoCombate"] = JsonValueKind.Null
+            ["resultadoCombate"] = JsonValueKind.Null,
+            ["golpePoderosoDesbloqueado"] = JsonValueKind.False,
+            ["golpePoderosoNivelRequerido"] = JsonValueKind.Number
         };
         var opciones = new JsonSerializerOptions(JsonSerializerOptions.Web);
         opciones.Converters.Add(new JsonStringEnumConverter());
@@ -745,8 +835,8 @@ public class PartidaServiceTests
         int vidaEnemigoEsperada,
         int danioRecibidoEsperado)
     {
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(dificultad);
-        var partida = CrearPartidaEnCombate(x, y, dificultad, estadisticas.VidaJugador, estadisticas.VidaEnemigo);
+        var vidaEnemigo = dificultad == Dificultad.Normal ? 40 : 80;
+        var partida = CrearPartidaEnCombate(x, y, dificultad, 80, vidaEnemigo);
         var repositorio = new PartidaRepositoryFalso(partida);
 
         var resultado = await CrearServicio(repositorio).AtacarAsync(UsuarioId, PartidaId);
@@ -837,24 +927,198 @@ public class PartidaServiceTests
         Assert.Equal(Dificultad.Dificil, partida.Personaje.DificultadDesbloqueada);
     }
 
+    [Fact]
+    public async Task Listar_PasaLaConsultaYElUsuarioAlRepositorio()
+    {
+        var repositorio = new PartidaRepositoryFalso(CrearPartida()) { TotalListado = 1 };
+
+        await CrearServicio(repositorio).ObtenerPorUsuarioAsync(UsuarioId, new ConsultaPartidasRequest
+        {
+            Estado = EstadoPartida.Finalizada,
+            Dificultad = Dificultad.Dificil,
+            Orden = "asc",
+            Page = 3,
+            PageSize = 20
+        });
+
+        Assert.Equal((UsuarioId, EstadoPartida.Finalizada, Dificultad.Dificil, true, 3, 20), repositorio.UltimaConsulta);
+    }
+
+    [Fact]
+    public async Task Listar_SinParametros_UsaLosValoresPredeterminados()
+    {
+        var repositorio = new PartidaRepositoryFalso(CrearPartida()) { TotalListado = 1 };
+
+        var pagina = await CrearServicio(repositorio).ObtenerPorUsuarioAsync(UsuarioId, new ConsultaPartidasRequest());
+
+        Assert.Equal((UsuarioId, (EstadoPartida?)null, (Dificultad?)null, false, 1, 10), repositorio.UltimaConsulta);
+        Assert.Equal(1, pagina.Page);
+        Assert.Equal(10, pagina.PageSize);
+    }
+
+    [Theory]
+    [InlineData(0, 10, 0)]
+    [InlineData(1, 10, 1)]
+    [InlineData(10, 10, 1)]
+    [InlineData(11, 10, 2)]
+    [InlineData(25, 10, 3)]
+    public async Task Listar_CalculaElTotalDePaginas(int total, int pageSize, int paginasEsperadas)
+    {
+        var repositorio = new PartidaRepositoryFalso(CrearPartida()) { TotalListado = total };
+
+        var pagina = await CrearServicio(repositorio).ObtenerPorUsuarioAsync(UsuarioId, new ConsultaPartidasRequest { PageSize = pageSize });
+
+        Assert.Equal(total, pagina.TotalItems);
+        Assert.Equal(paginasEsperadas, pagina.TotalPages);
+        Assert.Equal(PartidaId, Assert.Single(pagina.Items).Id);
+    }
+
+    [Theory]
+    [InlineData(1, 1, "desc", true)]
+    [InlineData(1, 50, "asc", true)]
+    [InlineData(1_000_000, 10, "desc", true)]
+    [InlineData(0, 10, "desc", false)]
+    [InlineData(1_000_001, 10, "desc", false)]
+    [InlineData(1, 0, "desc", false)]
+    [InlineData(1, 51, "desc", false)]
+    [InlineData(1, 10, "abc", false)]
+    [InlineData(1, 10, "ASC", false)]
+    public void ConsultaPartidas_ValidaLimites(int page, int pageSize, string orden, bool esValida)
+    {
+        var consulta = new ConsultaPartidasRequest { Page = page, PageSize = pageSize, Orden = orden };
+
+        var valida = Validator.TryValidateObject(consulta, new ValidationContext(consulta), null, validateAllProperties: true);
+
+        Assert.Equal(esValida, valida);
+    }
+
+    [Fact]
+    public void ConsultaPartidas_RechazaEnumsSinDefinir()
+    {
+        var consulta = new ConsultaPartidasRequest { Estado = (EstadoPartida)99, Dificultad = (Dificultad)99 };
+        var errores = new List<ValidationResult>();
+
+        Validator.TryValidateObject(consulta, new ValidationContext(consulta), errores, validateAllProperties: true);
+
+        Assert.Equal(2, errores.Count);
+    }
+
     [Theory]
     [InlineData(Dificultad.Normal)]
     [InlineData(Dificultad.Dificil)]
-    public async Task Atacar_Victoria_OtorgaCienDeExperienciaYLaDevuelve(Dificultad dificultad)
+    public async Task Atacar_VictoriaEnNivelMaximo_AcumulaLaExperienciaDelEnemigoSinSubir(Dificultad dificultad)
     {
         var partida = CrearPartidaEnCombate(4, 3, dificultad, 60, 10);
         partida.Personaje.Nivel = 3;
         partida.Personaje.Experiencia = 20;
+        partida.Enemigo.ExperienciaOtorgada = 35;
 
         var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).AtacarAsync(UsuarioId, PartidaId);
 
         var respuesta = VerificarAceptado(resultado);
-        Assert.Equal(100, respuesta.ExperienciaGanada);
+        Assert.Equal(35, respuesta.ExperienciaGanada);
         Assert.Equal(3, partida.Personaje.Nivel);
-        Assert.Equal(120, partida.Personaje.Experiencia);
+        Assert.Equal(55, partida.Personaje.Experiencia);
         Assert.Equal(3, respuesta.Estado.PersonajeNivel);
-        Assert.Equal(120, respuesta.Estado.PersonajeExperiencia);
-        Assert.Equal(300, respuesta.Estado.PersonajeExperienciaSiguienteNivel);
+        Assert.Equal(3, respuesta.Estado.PersonajeNivelMaximo);
+        Assert.Equal(55, respuesta.Estado.PersonajeExperiencia);
+        Assert.Null(respuesta.Estado.PersonajeExperienciaSiguienteNivel);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    public async Task ObtenerEstado_InformaSiGolpePoderosoEstaDesbloqueado(int nivel, bool esperado)
+    {
+        var partida = CrearPartida();
+        partida.Personaje.Nivel = nivel;
+
+        var estado = await CrearServicio(new PartidaRepositoryFalso(partida)).ObtenerEstadoAsync(UsuarioId, PartidaId);
+
+        Assert.NotNull(estado);
+        Assert.Equal(esperado, estado.GolpePoderosoDesbloqueado);
+        Assert.Equal(2, estado.GolpePoderosoNivelRequerido);
+    }
+
+    [Fact]
+    public async Task GolpePoderoso_EnNivelUno_SeRechazaSinEscribir()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).UsarGolpePoderosoAsync(UsuarioId, PartidaId);
+
+        VerificarRechazo(resultado, RechazoAtaque.HabilidadBloqueada);
+        VerificarSinEscrituras(repositorio, partida, 4, 3);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task GolpePoderoso_DesdeNivelDos_DuplicaElAtaque(int nivel)
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        partida.Personaje.Nivel = nivel;
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).UsarGolpePoderosoAsync(UsuarioId, PartidaId);
+
+        var respuesta = VerificarAceptado(resultado);
+        Assert.Equal(30, respuesta.DanioInfligido);
+        Assert.Equal(10, respuesta.DanioRecibido);
+        Assert.Equal(10, partida.VidaEnemigoActual);
+        Assert.Equal(70, partida.VidaPersonajeActual);
+    }
+
+    [Fact]
+    public async Task GolpePoderoso_FueraDeAlcance_SeRechazaSinEscribir()
+    {
+        var partida = CrearPartidaEnCombate(3, 3, Dificultad.Normal, 80, 40);
+        partida.Personaje.Nivel = 2;
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).UsarGolpePoderosoAsync(UsuarioId, PartidaId);
+
+        VerificarRechazo(resultado, RechazoAtaque.FueraDeAlcance);
+        VerificarSinEscrituras(repositorio, partida, 3, 3);
+    }
+
+    [Fact]
+    public async Task GolpePoderoso_Victoria_OtorgaLaExperienciaDelEnemigo()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 20);
+        partida.Personaje.Nivel = 2;
+        partida.Enemigo.ExperienciaOtorgada = 20;
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).UsarGolpePoderosoAsync(UsuarioId, PartidaId);
+
+        var respuesta = VerificarAceptado(resultado);
+        Assert.Equal(ResultadoCombate.Victoria, respuesta.Estado.ResultadoCombate);
+        Assert.Equal(20, respuesta.ExperienciaGanada);
+        Assert.Equal(20, partida.Personaje.Experiencia);
+    }
+
+    [Fact]
+    public async Task EndpointGolpePoderoso_Bloqueado_Devuelve409ConMensaje()
+    {
+        var controlador = CrearControlador(new PartidaRepositoryFalso(
+            CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40)));
+
+        var respuesta = await controlador.UsarGolpePoderoso(PartidaId, CancellationToken.None);
+
+        VerificarConflicto(respuesta, "Golpe poderoso bloqueado.", "Golpe poderoso se desbloquea en el nivel 2.");
+    }
+
+    [Fact]
+    public void EndpointGolpePoderoso_NoRecibeDatosDelCliente()
+    {
+        var metodo = typeof(PartidasController).GetMethod(nameof(PartidasController.UsarGolpePoderoso))!;
+
+        var ruta = Assert.Single(metodo.GetCustomAttributes(typeof(HttpPostAttribute), true).Cast<HttpPostAttribute>());
+        Assert.Equal("{id:int:min(1)}/golpe-poderoso", ruta.Template);
+        Assert.Equal(
+            [typeof(int), typeof(CancellationToken)],
+            metodo.GetParameters().Select(parametro => parametro.ParameterType));
     }
 
     [Fact]
@@ -1000,6 +1264,18 @@ public class PartidaServiceTests
         VerificarAceptado(resultado);
         Assert.False(repositorio.UltimoDesbloqueoSolicitado);
         Assert.Equal(Dificultad.Normal, partida.Personaje.DificultadDesbloqueada);
+    }
+
+    [Fact]
+    public async Task Atacar_VictoriaEnDificil_ConservaElDesbloqueo()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Dificil, 60, 10);
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).AtacarAsync(UsuarioId, PartidaId);
+
+        VerificarAceptado(resultado);
+        Assert.Equal(Dificultad.Dificil, partida.Personaje.DificultadDesbloqueada);
     }
 
     [Fact]
@@ -1313,7 +1589,8 @@ public class PartidaServiceTests
     {
         var metodo = typeof(PartidasController).GetMethod(nameof(PartidasController.Atacar))!;
 
-        Assert.NotEmpty(typeof(PartidasController).GetCustomAttributes(typeof(AuthorizeAttribute), true));
+        var autorizacion = Assert.Single(typeof(PartidasController).GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
+        Assert.Equal(RolesUsuario.Jugador, autorizacion.Roles);
         Assert.Empty(metodo.GetCustomAttributes(typeof(AllowAnonymousAttribute), true));
         var ruta = Assert.Single(metodo.GetCustomAttributes(typeof(HttpPostAttribute), true).Cast<HttpPostAttribute>());
         Assert.Equal("{id:int:min(1)}/ataque", ruta.Template);
@@ -1338,7 +1615,7 @@ public class PartidaServiceTests
 
     // MoverAsync y FinalizarAsync no usan los repositorios de personajes ni de enemigos.
     private static PartidaService CrearServicio(IPartidaRepository repositorio) =>
-        new(repositorio, null!, null!);
+        new(repositorio, null!, null!, NullLogger<PartidaService>.Instance);
 
     private static PartidasController CrearControlador(IPartidaRepository repositorio) =>
         CrearControlador(CrearServicio(repositorio));
@@ -1355,12 +1632,14 @@ public class PartidaServiceTests
         };
     }
 
+    // Valores simples para calcular a mano: sin defensas, cada ataque aplica todo su daño.
+    // Las reglas con los valores reales del catálogo se prueban en ReglasCombateTests.
     private static Partida CrearPartida() => new()
     {
         Id = PartidaId,
         Estado = EstadoPartida.Activa,
-        Personaje = new Personaje { Nombre = "Bruma", Nivel = 1, UsuarioId = UsuarioId },
-        Enemigo = new Enemigo { Nombre = "Goblin" },
+        Personaje = new Personaje { Nombre = "Bruma", Nivel = 1, UsuarioId = UsuarioId, VidaMaxima = 80, Ataque = 15, Defensa = 0 },
+        Enemigo = new Enemigo { Nombre = "Goblin", VidaMaxima = 40, Ataque = 10, Defensa = 0, ExperienciaOtorgada = 100 },
         VidaPersonajeActual = 84,
         VidaEnemigoActual = 30,
         PersonajeX = 1,
@@ -1394,6 +1673,7 @@ public class PartidaServiceTests
             "Bruma",
             1,
             0,
+            3,
             100,
             70,
             80,
@@ -1407,7 +1687,9 @@ public class PartidaServiceTests
             5,
             3,
             Dificultad.Normal,
-            null),
+            null,
+            false,
+            2),
         15,
         10,
         0);
@@ -1572,6 +1854,9 @@ public class PartidaServiceTests
                 Nombre = origen.Personaje.Nombre,
                 Nivel = origen.Personaje.Nivel,
                 Experiencia = origen.Personaje.Experiencia,
+                VidaMaxima = origen.Personaje.VidaMaxima,
+                Ataque = origen.Personaje.Ataque,
+                Defensa = origen.Personaje.Defensa,
                 UsuarioId = origen.Personaje.UsuarioId,
                 DificultadDesbloqueada = origen.Personaje.DificultadDesbloqueada
             },
@@ -1585,10 +1870,23 @@ public class PartidaServiceTests
             EnemigoY = origen.EnemigoY
         };
 
-        public Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
+        public (int UsuarioId, EstadoPartida? Estado, Dificultad? Dificultad, bool Ascendente, int Page, int PageSize)? UltimaConsulta { get; private set; }
+
+        public int TotalListado { get; init; }
+
+        public Task<(IReadOnlyList<Partida> Partidas, int Total)> ObtenerPorUsuarioAsync(
             int usuarioId,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            EstadoPartida? estado,
+            Dificultad? dificultad,
+            bool ascendente,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+        {
+            UltimaConsulta = (usuarioId, estado, dificultad, ascendente, page, pageSize);
+            IReadOnlyList<Partida> partidas = partida is null ? [] : [partida];
+            return Task.FromResult((partidas, TotalListado));
+        }
 
         public Task<Partida> CrearAsync(Partida nuevaPartida, CancellationToken cancellationToken = default)
         {
@@ -1643,14 +1941,21 @@ public class PartidaServiceTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<AtaquePartidaResult?>(resultado);
 
-        public Task<PartidaResponse?> CrearAsync(
+        public Task<AtaquePartidaResult?> UsarGolpePoderosoAsync(
+            int usuarioId,
+            int partidaId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AtaquePartidaResult?>(resultado);
+
+        public Task<CrearPartidaResult?> CrearAsync(
             int usuarioId,
             CrearPartidaRequest request,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<PartidaResponse>> ObtenerPorUsuarioAsync(
+        public Task<PaginaPartidasResponse> ObtenerPorUsuarioAsync(
             int usuarioId,
+            ConsultaPartidasRequest consulta,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -1701,12 +2006,18 @@ public class PartidaServiceTests
 
         public Task<Personaje> ActualizarAsync(Personaje existente, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<int> EliminarSinPartidasAsync(int id, int usuarioId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
-    private sealed class EnemigoRepositoryFalso(int vidaMaxima = 30) : IEnemigoRepository
+    private sealed class EnemigoRepositoryFalso(bool sinEnemigos = false) : IEnemigoRepository
     {
         public Task<Enemigo?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Enemigo?>(new Enemigo { Id = id, Nombre = "Goblin", VidaMaxima = vidaMaxima });
+            throw new NotSupportedException();
+
+        public Task<Enemigo?> ObtenerPorNivelAsync(int nivel, CancellationToken cancellationToken = default) =>
+            Task.FromResult(sinEnemigos ? null : DatosIniciales.Enemigos().FirstOrDefault(enemigo => enemigo.Nivel == nivel));
 
         public Task<IReadOnlyList<Enemigo>> ObtenerTodosAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

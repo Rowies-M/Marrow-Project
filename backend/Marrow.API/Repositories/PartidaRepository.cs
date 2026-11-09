@@ -27,12 +27,43 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
                 partida => partida.Id == id && partida.Personaje.UsuarioId == usuarioId,
                 cancellationToken);
 
-    public async Task<IReadOnlyList<Partida>> ObtenerPorUsuarioAsync(
+    public async Task<(IReadOnlyList<Partida> Partidas, int Total)> ObtenerPorUsuarioAsync(
         int usuarioId,
-        CancellationToken cancellationToken = default) =>
-        await context.Partidas.AsNoTracking()
-            .Where(partida => partida.Personaje.UsuarioId == usuarioId)
-            .OrderByDescending(partida => partida.FechaUltimaActualizacion).ToListAsync(cancellationToken);
+        EstadoPartida? estado,
+        Dificultad? dificultad,
+        bool ascendente,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        // Sin Include: el listado no devuelve datos del personaje ni del enemigo, y el filtro por usuario ya hace el JOIN.
+        var consulta = context.Partidas.AsNoTracking()
+            .Where(partida => partida.Personaje.UsuarioId == usuarioId);
+
+        if (estado is not null)
+        {
+            consulta = consulta.Where(partida => partida.Estado == estado);
+        }
+
+        if (dificultad is not null)
+        {
+            consulta = consulta.Where(partida => partida.Dificultad == dificultad);
+        }
+
+        var total = await consulta.CountAsync(cancellationToken);
+
+        // El Id desempata las partidas con la misma fecha, para que ninguna se repita ni se pierda entre páginas.
+        var ordenada = ascendente
+            ? consulta.OrderBy(partida => partida.FechaCreacion).ThenBy(partida => partida.Id)
+            : consulta.OrderByDescending(partida => partida.FechaCreacion).ThenByDescending(partida => partida.Id);
+
+        var partidas = await ordenada
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (partidas, total);
+    }
 
     public async Task<Partida> CrearAsync(Partida partida, CancellationToken cancellationToken = default)
     {
@@ -116,6 +147,7 @@ public class PartidaRepository(MarrowDbContext context) : IPartidaRepository
                 .SetProperty(partida => partida.FechaUltimaActualizacion, _ => DateTime.UtcNow),
                 cancellationToken);
 
+        // Solo pasa de Normal a Difícil, así que nunca retira un desbloqueo.
         if (filasActualizadas > 0 && desbloquearDificil)
         {
             await context.Personajes

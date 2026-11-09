@@ -16,4 +16,6 @@ public interface IPersonajeRepository
     Task<Personaje> CrearAsync(Personaje personaje, CancellationToken cancellationToken = default);
 
     Task<Personaje> ActualizarAsync(Personaje personaje, CancellationToken cancellationToken = default);
+
+    Task<int> EliminarSinPartidasAsync(int id, int usuarioId, CancellationToken cancellationToken = default);
 }

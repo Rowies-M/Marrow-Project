@@ -1,3 +1,4 @@
+using Marrow.API.Data;
 using Marrow.API.Models;
 using Marrow.API.Services;
 
@@ -5,7 +6,14 @@ namespace Marrow.API.Tests;
 
 public class ReglasCombateTests
 {
-    private const int LimiteAtaques = 20;
+    private const int LimiteAtaques = 30;
+
+    private static Personaje CrearGuerrero() => new() { VidaMaxima = 80, Ataque = 15, Defensa = 5 };
+
+    private static Enemigo ObtenerEnemigo(int nivel) => DatosIniciales.Enemigos().Single(enemigo => enemigo.Nivel == nivel);
+
+    private static EstadisticasCombate ObtenerEstadisticas(Dificultad dificultad, int nivelEnemigo) =>
+        ReglasCombate.ObtenerEstadisticas(dificultad, CrearGuerrero(), ObtenerEnemigo(nivelEnemigo));
 
     [Theory]
     [InlineData(Dificultad.Normal, 0)]
@@ -24,27 +32,64 @@ public class ReglasCombateTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 80, 15, 40, 10)]
-    [InlineData(Dificultad.Dificil, 80, 15, 80, 15)]
-    public void ObtenerEstadisticas_DevuelveLosValoresAcordados(
-        Dificultad dificultad,
-        int vidaJugador,
-        int danioJugador,
-        int vidaEnemigo,
-        int danioEnemigo)
+    [InlineData(1, "Goblin", 30, 5, 2, 100)]
+    [InlineData(2, "Esqueleto", 45, 8, 3, 100)]
+    [InlineData(3, "Orco", 80, 12, 5, 100)]
+    public void Catalogo_TieneUnEnemigoPorCadaNivel(
+        int nivel,
+        string nombre,
+        int vida,
+        int ataque,
+        int defensa,
+        int experiencia)
     {
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(dificultad);
+        var enemigo = ObtenerEnemigo(nivel);
 
-        Assert.Equal(vidaJugador, estadisticas.VidaJugador);
-        Assert.Equal(danioJugador, estadisticas.DanioJugador);
+        Assert.Equal(nombre, enemigo.Nombre);
+        Assert.Equal(vida, enemigo.VidaMaxima);
+        Assert.Equal(ataque, enemigo.Ataque);
+        Assert.Equal(defensa, enemigo.Defensa);
+        Assert.Equal(experiencia, enemigo.ExperienciaOtorgada);
+    }
+
+    [Theory]
+    [InlineData(Dificultad.Normal, 1, 30, 5, 2)]
+    [InlineData(Dificultad.Normal, 2, 45, 8, 3)]
+    [InlineData(Dificultad.Normal, 3, 80, 12, 5)]
+    [InlineData(Dificultad.Dificil, 1, 60, 7, 2)]
+    [InlineData(Dificultad.Dificil, 2, 90, 12, 3)]
+    [InlineData(Dificultad.Dificil, 3, 160, 18, 5)]
+    public void ObtenerEstadisticas_AplicaLaDificultadSobreElCatalogo(
+        Dificultad dificultad,
+        int nivelEnemigo,
+        int vidaEnemigo,
+        int ataqueEnemigo,
+        int defensaEnemigo)
+    {
+        var estadisticas = ObtenerEstadisticas(dificultad, nivelEnemigo);
+
         Assert.Equal(vidaEnemigo, estadisticas.VidaEnemigo);
-        Assert.Equal(danioEnemigo, estadisticas.DanioEnemigo);
+        Assert.Equal(ataqueEnemigo, estadisticas.AtaqueEnemigo);
+        Assert.Equal(defensaEnemigo, estadisticas.DefensaEnemigo);
+    }
+
+    [Fact]
+    public void ObtenerEstadisticas_UsaLosValoresDelPersonaje()
+    {
+        var personaje = new Personaje { VidaMaxima = 100, Ataque = 20, Defensa = 7 };
+
+        var estadisticas = ReglasCombate.ObtenerEstadisticas(Dificultad.Normal, personaje, ObtenerEnemigo(1));
+
+        Assert.Equal(100, estadisticas.VidaJugador);
+        Assert.Equal(20, estadisticas.AtaqueJugador);
+        Assert.Equal(7, estadisticas.DefensaJugador);
     }
 
     [Fact]
     public void ObtenerEstadisticas_DificultadInvalida_LanzaError()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => ReglasCombate.ObtenerEstadisticas((Dificultad)99));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => ReglasCombate.ObtenerEstadisticas((Dificultad)99, CrearGuerrero(), ObtenerEnemigo(1)));
     }
 
     [Theory]
@@ -81,49 +126,85 @@ public class ReglasCombateTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 70, 25, 10)]
-    [InlineData(Dificultad.Dificil, 65, 65, 15)]
-    public void ResolverAtaque_EnemigoSobrevive_AplicaDanioYContraataque(
-        Dificultad dificultad,
+    [InlineData(1, 79, 17, 13, 1)]
+    [InlineData(2, 77, 33, 12, 3)]
+    [InlineData(3, 73, 70, 10, 7)]
+    public void ResolverAtaque_EnemigoSobrevive_RestaLaDefensaAlDanioYAlContraataque(
+        int nivelEnemigo,
         int vidaJugadorEsperada,
         int vidaEnemigoEsperada,
+        int danioInfligidoEsperado,
         int danioRecibidoEsperado)
     {
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(dificultad);
+        var estadisticas = ObtenerEstadisticas(Dificultad.Normal, nivelEnemigo);
 
-        var resolucion = ReglasCombate.ResolverAtaque(dificultad, estadisticas.VidaJugador, estadisticas.VidaEnemigo);
+        var resolucion = ReglasCombate.ResolverAtaque(estadisticas, estadisticas.VidaJugador, estadisticas.VidaEnemigo);
 
         Assert.Equal(vidaJugadorEsperada, resolucion.VidaJugador);
         Assert.Equal(vidaEnemigoEsperada, resolucion.VidaEnemigo);
-        Assert.Equal(15, resolucion.DanioInfligido);
+        Assert.Equal(danioInfligidoEsperado, resolucion.DanioInfligido);
         Assert.Equal(danioRecibidoEsperado, resolucion.DanioRecibido);
         Assert.Null(resolucion.Resultado);
     }
 
     [Fact]
-    public void ResolverAtaque_EnemigoSobreviveConUnPuntoDeVida_ContraatacaSinTerminarElCombate()
+    public void ResolverAtaque_LaDefensaSuperaAlAtaque_AplicaElDanioMinimo()
     {
-        var resolucion = ReglasCombate.ResolverAtaque(Dificultad.Normal, 80, 16);
+        var estadisticas = new EstadisticasCombate(80, 1, 50, 40, 1, 50);
 
-        Assert.Equal(1, resolucion.VidaEnemigo);
-        Assert.Equal(70, resolucion.VidaJugador);
-        Assert.Equal(15, resolucion.DanioInfligido);
-        Assert.Equal(10, resolucion.DanioRecibido);
-        Assert.Null(resolucion.Resultado);
+        var resolucion = ReglasCombate.ResolverAtaque(estadisticas, 80, 40);
+
+        Assert.Equal(1, resolucion.DanioInfligido);
+        Assert.Equal(1, resolucion.DanioRecibido);
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 15, 15)]
-    [InlineData(Dificultad.Dificil, 15, 15)]
-    [InlineData(Dificultad.Normal, 10, 10)]
-    [InlineData(Dificultad.Dificil, 5, 5)]
-    [InlineData(Dificultad.Normal, 1, 1)]
+    [InlineData(1, 28)]
+    [InlineData(2, 27)]
+    [InlineData(3, 25)]
+    public void ResolverAtaque_GolpePoderoso_DuplicaElAtaqueAntesDeRestarLaDefensa(int nivelEnemigo, int danioEsperado)
+    {
+        var estadisticas = ObtenerEstadisticas(Dificultad.Dificil, nivelEnemigo);
+
+        var resolucion = ReglasCombate.ResolverAtaque(
+            estadisticas,
+            estadisticas.VidaJugador,
+            estadisticas.VidaEnemigo,
+            golpePoderoso: true);
+
+        Assert.Equal(danioEsperado, resolucion.DanioInfligido);
+    }
+
+    [Fact]
+    public void ResolverAtaque_GolpePoderoso_NoAumentaElContraataque()
+    {
+        var estadisticas = ObtenerEstadisticas(Dificultad.Dificil, 3);
+
+        var basico = ReglasCombate.ResolverAtaque(estadisticas, 80, 160);
+        var poderoso = ReglasCombate.ResolverAtaque(estadisticas, 80, 160, golpePoderoso: true);
+
+        Assert.Equal(13, basico.DanioRecibido);
+        Assert.Equal(basico.DanioRecibido, poderoso.DanioRecibido);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    public void GolpePoderosoDesbloqueado_DesdeElNivelDos(int nivel, bool esperado)
+    {
+        Assert.Equal(esperado, ReglasCombate.GolpePoderosoDesbloqueado(nivel));
+    }
+
+    [Theory]
+    [InlineData(13, 13)]
+    [InlineData(5, 5)]
+    [InlineData(1, 1)]
     public void ResolverAtaque_EnemigoMuere_EsVictoriaSinContraataqueNiVidaNegativa(
-        Dificultad dificultad,
         int vidaEnemigo,
         int danioInfligidoEsperado)
     {
-        var resolucion = ReglasCombate.ResolverAtaque(dificultad, 60, vidaEnemigo);
+        var resolucion = ReglasCombate.ResolverAtaque(ObtenerEstadisticas(Dificultad.Normal, 1), 60, vidaEnemigo);
 
         Assert.Equal(0, resolucion.VidaEnemigo);
         Assert.Equal(60, resolucion.VidaJugador);
@@ -133,20 +214,18 @@ public class ReglasCombateTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 10, 10)]
-    [InlineData(Dificultad.Dificil, 15, 15)]
-    [InlineData(Dificultad.Normal, 5, 5)]
-    [InlineData(Dificultad.Dificil, 1, 1)]
+    [InlineData(13, 13)]
+    [InlineData(5, 5)]
+    [InlineData(1, 1)]
     public void ResolverAtaque_ContraataqueMataAlJugador_EsDerrotaSinVidaNegativa(
-        Dificultad dificultad,
         int vidaJugador,
         int danioRecibidoEsperado)
     {
-        var resolucion = ReglasCombate.ResolverAtaque(dificultad, vidaJugador, 40);
+        var resolucion = ReglasCombate.ResolverAtaque(ObtenerEstadisticas(Dificultad.Dificil, 3), vidaJugador, 160);
 
         Assert.Equal(0, resolucion.VidaJugador);
-        Assert.Equal(25, resolucion.VidaEnemigo);
-        Assert.Equal(15, resolucion.DanioInfligido);
+        Assert.Equal(150, resolucion.VidaEnemigo);
+        Assert.Equal(10, resolucion.DanioInfligido);
         Assert.Equal(danioRecibidoEsperado, resolucion.DanioRecibido);
         Assert.Equal(ResultadoCombate.Derrota, resolucion.Resultado);
     }
@@ -154,7 +233,7 @@ public class ReglasCombateTests
     [Fact]
     public void ResolverAtaque_JugadorSobreviveConUnPuntoDeVida_NoTerminaElCombate()
     {
-        var resolucion = ReglasCombate.ResolverAtaque(Dificultad.Normal, 11, 40);
+        var resolucion = ReglasCombate.ResolverAtaque(ObtenerEstadisticas(Dificultad.Dificil, 3), 14, 160);
 
         Assert.Equal(1, resolucion.VidaJugador);
         Assert.Null(resolucion.Resultado);
@@ -163,7 +242,7 @@ public class ReglasCombateTests
     [Fact]
     public void ResolverAtaque_AmbosConPocaVida_GanaElJugadorPorqueAtacaPrimero()
     {
-        var resolucion = ReglasCombate.ResolverAtaque(Dificultad.Dificil, 1, 15);
+        var resolucion = ReglasCombate.ResolverAtaque(ObtenerEstadisticas(Dificultad.Dificil, 3), 1, 10);
 
         Assert.Equal(1, resolucion.VidaJugador);
         Assert.Equal(0, resolucion.VidaEnemigo);
@@ -178,14 +257,7 @@ public class ReglasCombateTests
     public void ResolverAtaque_ConVidaAgotada_LanzaError(int vidaJugador, int vidaEnemigo)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => ReglasCombate.ResolverAtaque(Dificultad.Normal, vidaJugador, vidaEnemigo));
-    }
-
-    [Fact]
-    public void ResolverAtaque_DificultadInvalida_LanzaError()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => ReglasCombate.ResolverAtaque((Dificultad)99, 80, 40));
+            () => ReglasCombate.ResolverAtaque(ObtenerEstadisticas(Dificultad.Normal, 1), vidaJugador, vidaEnemigo));
     }
 
     [Theory]
@@ -205,14 +277,37 @@ public class ReglasCombateTests
     }
 
     [Theory]
-    [InlineData(Dificultad.Normal, 3, 60)]
-    [InlineData(Dificultad.Dificil, 6, 5)]
-    public void CombateCompleto_DesdeLaVidaInicial_TerminaEnVictoriaConLosValoresEsperados(
-        Dificultad dificultad,
-        int ataquesEsperados,
-        int vidaJugadorFinal)
+    [InlineData(Dificultad.Normal, Dificultad.Normal, true)]
+    [InlineData(Dificultad.Normal, Dificultad.Dificil, true)]
+    [InlineData(Dificultad.Dificil, Dificultad.Normal, false)]
+    [InlineData(Dificultad.Dificil, Dificultad.Dificil, true)]
+    [InlineData((Dificultad)99, Dificultad.Dificil, false)]
+    public void DificultadDisponible_DificilRequiereElDesbloqueo(
+        Dificultad solicitada,
+        Dificultad desbloqueada,
+        bool esperado)
     {
-        var estadisticas = ReglasCombate.ObtenerEstadisticas(dificultad);
+        Assert.Equal(esperado, ReglasCombate.DificultadDisponible(solicitada, desbloqueada));
+    }
+
+    [Theory]
+    [InlineData(Dificultad.Normal, 1, false, 3, 78, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Normal, 2, false, 4, 71, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Normal, 3, false, 8, 31, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Dificil, 1, false, 5, 72, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Dificil, 2, false, 8, 31, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Dificil, 3, false, 7, 0, ResultadoCombate.Derrota)]
+    [InlineData(Dificultad.Dificil, 2, true, 4, 59, ResultadoCombate.Victoria)]
+    [InlineData(Dificultad.Dificil, 3, true, 7, 2, ResultadoCombate.Victoria)]
+    public void CombateCompleto_ConElCatalogo_TerminaConLosValoresEsperados(
+        Dificultad dificultad,
+        int nivelEnemigo,
+        bool golpePoderoso,
+        int ataquesEsperados,
+        int vidaJugadorFinal,
+        ResultadoCombate resultadoEsperado)
+    {
+        var estadisticas = ObtenerEstadisticas(dificultad, nivelEnemigo);
         var vidaJugador = estadisticas.VidaJugador;
         var vidaEnemigo = estadisticas.VidaEnemigo;
         var ataques = 0;
@@ -222,7 +317,7 @@ public class ReglasCombateTests
         {
             Assert.True(ataques < LimiteAtaques, $"El combate no terminó en {LimiteAtaques} ataques.");
 
-            var resolucion = ReglasCombate.ResolverAtaque(dificultad, vidaJugador, vidaEnemigo);
+            var resolucion = ReglasCombate.ResolverAtaque(estadisticas, vidaJugador, vidaEnemigo, golpePoderoso);
             vidaJugador = resolucion.VidaJugador;
             vidaEnemigo = resolucion.VidaEnemigo;
             resultado = resolucion.Resultado;
@@ -231,7 +326,6 @@ public class ReglasCombateTests
 
         Assert.Equal(ataquesEsperados, ataques);
         Assert.Equal(vidaJugadorFinal, vidaJugador);
-        Assert.Equal(0, vidaEnemigo);
-        Assert.Equal(ResultadoCombate.Victoria, resultado);
+        Assert.Equal(resultadoEsperado, resultado);
     }
 }

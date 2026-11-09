@@ -20,9 +20,12 @@ public class Personaje
 
     public ClasePersonaje Clase { get; set; }
 
+    /// <summary>Dificultad más alta disponible. No selecciona la dificultad de las partidas: esa se elige al crearlas.</summary>
     public Dificultad DificultadDesbloqueada { get; set; } = Dificultad.Normal;
 
     public int UsuarioId { get; set; }
 
     public Usuario Usuario { get; set; } = null!;
+
+    public ICollection<Habilidad> Habilidades { get; set; } = new List<Habilidad>();
 }

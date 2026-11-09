@@ -1,9 +1,12 @@
 using Marrow.API.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Marrow.API.Data;
 
-public class MarrowDbContext(DbContextOptions<MarrowDbContext> options) : DbContext(options)
+public class MarrowDbContext(DbContextOptions<MarrowDbContext> options)
+    : IdentityDbContext<Usuario, IdentityRole<int>, int>(options)
 {
     public DbSet<Usuario> Usuarios => Set<Usuario>();
 
@@ -13,46 +16,22 @@ public class MarrowDbContext(DbContextOptions<MarrowDbContext> options) : DbCont
 
     public DbSet<Partida> Partidas => Set<Partida>();
 
+    public DbSet<Habilidad> Habilidades => Set<Habilidad>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        // Identity usa la tabla y la columna existentes, para conservar los usuarios y sus relaciones.
+        modelBuilder.Entity<Usuario>().ToTable("Usuarios");
         modelBuilder.Entity<Usuario>().HasKey(usuario => usuario.Id);
+        modelBuilder.Entity<Usuario>().Ignore(usuario => usuario.NombreUsuario);
+        modelBuilder.Entity<Usuario>().Property(usuario => usuario.UserName).HasColumnName("NombreUsuario");
         modelBuilder.Entity<Personaje>().HasKey(personaje => personaje.Id);
         modelBuilder.Entity<Enemigo>().HasKey(enemigo => enemigo.Id);
         modelBuilder.Entity<Partida>().HasKey(partida => partida.Id);
 
-        modelBuilder.Entity<Enemigo>().HasData(
-            new Enemigo
-            {
-                Id = 1,
-                Nombre = "Goblin",
-                Nivel = 1,
-                VidaMaxima = 30,
-                Ataque = 5,
-                Defensa = 2,
-                ExperienciaOtorgada = 10
-            },
-            new Enemigo
-            {
-                Id = 2,
-                Nombre = "Esqueleto",
-                Nivel = 2,
-                VidaMaxima = 45,
-                Ataque = 8,
-                Defensa = 3,
-                ExperienciaOtorgada = 20
-            },
-            new Enemigo
-            {
-                Id = 3,
-                Nombre = "Orco",
-                Nivel = 3,
-                VidaMaxima = 80,
-                Ataque = 12,
-                Defensa = 5,
-                ExperienciaOtorgada = 35
-            });
+        modelBuilder.Entity<Enemigo>().HasData(DatosIniciales.Enemigos());
 
         modelBuilder.Entity<Personaje>()
             .HasOne(personaje => personaje.Usuario)
@@ -69,5 +48,18 @@ public class MarrowDbContext(DbContextOptions<MarrowDbContext> options) : DbCont
             .WithMany()
             .HasForeignKey(partida => partida.EnemigoId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Habilidad>().HasKey(habilidad => habilidad.Id);
+        modelBuilder.Entity<Habilidad>().HasIndex(habilidad => habilidad.Nombre).IsUnique();
+
+        // Relación N:M. La clave compuesta impide asignar dos veces la misma habilidad a un personaje.
+        modelBuilder.Entity<Personaje>()
+            .HasMany(personaje => personaje.Habilidades)
+            .WithMany(habilidad => habilidad.Personajes)
+            .UsingEntity<Dictionary<string, object>>(
+                "PersonajeHabilidades",
+                union => union.HasOne<Habilidad>().WithMany().HasForeignKey("HabilidadId"),
+                union => union.HasOne<Personaje>().WithMany().HasForeignKey("PersonajeId"),
+                union => union.HasKey("PersonajeId", "HabilidadId"));
     }
 }

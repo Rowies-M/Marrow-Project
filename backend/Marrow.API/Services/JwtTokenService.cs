@@ -10,9 +10,10 @@ namespace Marrow.API.Services;
 
 public sealed class JwtTokenService(IConfiguration configuration) : IJwtTokenService
 {
-    public JwtTokenResult GenerarToken(Usuario usuario)
+    public JwtTokenResult GenerarToken(Usuario usuario, IEnumerable<string> roles)
     {
         ArgumentNullException.ThrowIfNull(usuario);
+        ArgumentNullException.ThrowIfNull(roles);
 
         var issuer = ObtenerConfiguracion("Jwt:Issuer");
         var audience = ObtenerConfiguracion("Jwt:Audience");
@@ -21,13 +22,14 @@ public sealed class JwtTokenService(IConfiguration configuration) : IJwtTokenSer
         var ahora = DateTime.UtcNow;
         var expiraEn = ahora.AddMinutes(expirationMinutes);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
-            new Claim(ClaimTypes.Name, usuario.NombreUsuario),
-            new Claim(ClaimTypes.Email, usuario.Email),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+            new(ClaimTypes.Name, usuario.NombreUsuario),
+            new(ClaimTypes.Email, usuario.Email ?? string.Empty),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+        claims.AddRange(roles.Select(rol => new Claim(ClaimTypes.Role, rol)));
 
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),

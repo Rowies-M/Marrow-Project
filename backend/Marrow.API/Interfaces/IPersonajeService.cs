@@ -23,4 +23,9 @@ public interface IPersonajeService
         int personajeId,
         ActualizarPersonajeRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<ResultadoEliminacionPersonaje> EliminarAsync(
+        int usuarioId,
+        int personajeId,
+        CancellationToken cancellationToken = default);
 }
