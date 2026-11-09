@@ -9,7 +9,7 @@ import GameScene from '../components/GameScene.jsx'
 import TouchControls from '../components/TouchControls.jsx'
 import useGameKeyboard from '../hooks/useGameKeyboard.js'
 import useIsTouchDevice from '../hooks/useIsTouchDevice.js'
-import { attackPartida, finalizePartida, getPartidaEstado, movePartida } from '../services/partidaService.js'
+import { attackPartida, finalizePartida, getPartidaEstado, movePartida, powerStrikePartida } from '../services/partidaService.js'
 
 // Solo guía la interfaz: la decisión final sobre el ataque la toma el backend.
 function isEnemyAdjacent(gameState) {
@@ -23,10 +23,11 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [isMoving, setIsMoving] = useState(false)
-  const [isAttacking, setIsAttacking] = useState(false)
+  const [activeAttack, setActiveAttack] = useState(null)
   const [isAbandoning, setIsAbandoning] = useState(false)
   const [lastAttack, setLastAttack] = useState(null)
   const [reward, setReward] = useState(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const requestInProgressRef = useRef(false)
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
     loadGameState()
     return () => { cancelled = true }
-  }, [partida.id, token])
+  }, [loadAttempt, partida.id, token])
 
   const handleMove = useCallback(async (direction) => {
     if (requestInProgressRef.current) {
@@ -80,18 +81,20 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const isAdjacent = gameState ? isEnemyAdjacent(gameState) : false
   const characterLevel = gameState?.personajeNivel
 
-  const handleAttack = useCallback(async () => {
+  const powerStrikeUnlocked = gameState?.golpePoderosoDesbloqueado === true
+
+  const executeAttack = useCallback(async (attackType, sendAttack) => {
     if (requestInProgressRef.current || !isActive || !isAdjacent) {
       return
     }
 
     requestInProgressRef.current = true
-    setIsAttacking(true)
+    setActiveAttack(attackType)
     setError('')
     try {
-      const response = await attackPartida(token, partida.id)
+      const response = await sendAttack(token, partida.id)
       setGameState(response.estado)
-      setLastAttack({ danioInfligido: response.danioInfligido, danioRecibido: response.danioRecibido })
+      setLastAttack({ danioInfligido: response.danioInfligido, danioRecibido: response.danioRecibido, isPowerStrike: attackType === 'power' })
       if (response.experienciaGanada > 0) {
         setReward({
           experience: response.experienciaGanada,
@@ -101,8 +104,8 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
     } catch (requestError) {
       setError(requestError.message)
       setLastAttack(null)
-      if (requestError.status === 409) {
-        // Un rechazo indica que la pantalla quedó desactualizada: se vuelve a leer el estado real.
+      if (requestError.status === 409 || !requestError.status) {
+        // Tras un rechazo o un corte de red, la pantalla puede estar desactualizada: se vuelve a leer el estado real.
         try {
           setGameState(await getPartidaEstado(token, partida.id))
         } catch {
@@ -111,9 +114,12 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
       }
     } finally {
       requestInProgressRef.current = false
-      setIsAttacking(false)
+      setActiveAttack(null)
     }
   }, [characterLevel, isActive, isAdjacent, partida.id, token])
+
+  const handleAttack = useCallback(() => executeAttack('basic', attackPartida), [executeAttack])
+  const handlePowerStrike = useCallback(() => executeAttack('power', powerStrikePartida), [executeAttack])
 
   useGameKeyboard(isActive && !isAbandoning, handleMove, handleAttack)
 
@@ -137,17 +143,20 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
   }
 
   const characterName = gameState?.personajeNombre || personaje.nombre
-  const isBusy = isMoving || isAttacking || isAbandoning
+  const isBusy = isMoving || activeAttack !== null || isAbandoning
   const combatPanel = gameState && (
     <CombatPanel
       enemyName={gameState.enemigoNombre}
       isActive={isActive}
       isAdjacent={isAdjacent}
-      isAttacking={isAttacking}
       isBusy={isBusy}
       isTouchDevice={isTouchDevice}
+      activeAttack={activeAttack}
       lastAttack={lastAttack}
+      powerStrikeUnlocked={powerStrikeUnlocked}
+      powerStrikeRequiredLevel={gameState.golpePoderosoNivelRequerido}
       onAttack={handleAttack}
+      onPowerStrike={handlePowerStrike}
     />
   )
 
@@ -167,7 +176,14 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
         <div className="mt-4">
           {isLoading && <p className="stone-panel rounded p-4 text-sm text-stone-300" role="status">Cargando el estado de la partida...</p>}
-          {!gameState && <FormMessage>{error}</FormMessage>}
+          {!gameState && !isLoading && error && (
+            <div className="space-y-3">
+              <FormMessage>{error}</FormMessage>
+              <button className="rounded-sm border border-stone-600 px-4 py-2 font-serif font-semibold text-stone-200 transition hover:border-amber-500 hover:text-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400" type="button" onClick={() => setLoadAttempt((current) => current + 1)}>
+                Reintentar
+              </button>
+            </div>
+          )}
           {!isLoading && gameState && (
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="min-w-0 space-y-4">
@@ -193,6 +209,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
                 <GameHud
                   characterName={gameState.personajeNombre}
                   characterLevel={gameState.personajeNivel}
+                  characterMaxLevel={gameState.personajeNivelMaximo}
                   characterHealth={{ current: gameState.vidaPersonajeActual, maximum: gameState.vidaPersonajeMaxima }}
                   characterExperience={{ current: gameState.personajeExperiencia, maximum: gameState.personajeExperienciaSiguienteNivel }}
                   enemyName={gameState.enemigoNombre}

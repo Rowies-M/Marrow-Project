@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test'
+// El listado siempre se pide con parÃ¡metros; este patrÃ³n tambiÃ©n cubre la creaciÃ³n sin parÃ¡metros.
+const PARTIDAS_URL = /\/api\/partidas(\?.*)?$/
+
+function pagina(items, extra = {}) {
+  return { items, page: 1, pageSize: 10, totalItems: items.length, totalPages: items.length > 0 ? 1 : 0, ...extra }
+}
 
 const session = {
   token: 'mock-token-for-game-e2e',
@@ -13,6 +19,7 @@ const character = {
   id: 7,
   nombre: 'Bruma',
   nivel: 1,
+  nivelMaximo: 3,
   experiencia: 0,
   vidaActual: 100,
   vidaMaxima: 100,
@@ -39,6 +46,7 @@ const gameState = {
   personajeId: character.id,
   personajeNombre: character.nombre,
   personajeNivel: character.nivel,
+  personajeNivelMaximo: 3,
   personajeExperiencia: 30,
   personajeExperienciaSiguienteNivel: 100,
   vidaPersonajeActual: 84,
@@ -54,6 +62,8 @@ const gameState = {
   enemigoY: 3,
   dificultad: 'Dificil',
   resultadoCombate: null,
+  golpePoderosoDesbloqueado: false,
+  golpePoderosoNivelRequerido: 2,
 }
 
 async function preparePage(page, partidas) {
@@ -65,8 +75,8 @@ async function preparePage(page, partidas) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([character]) })
   })
 
-  await page.route('**/api/partidas', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(partidas) })
+  await page.route(PARTIDAS_URL, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pagina(partidas)) })
   })
 
   await page.route(`**/api/partidas/${activePartida.id}/estado`, async (route) => {
@@ -89,8 +99,8 @@ async function prepareMovablePage(page, initialState = gameState, movementRespon
   await page.route('**/api/personajes', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([character]) })
   })
-  await page.route('**/api/partidas', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([activePartida]) })
+  await page.route(PARTIDAS_URL, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pagina([activePartida])) })
   })
   await page.route(`**/api/partidas/${activePartida.id}/estado`, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentState) })
@@ -148,7 +158,7 @@ test.describe('Pantalla de juego', () => {
   test('no muestra la acción de jugar para partidas finalizadas', async ({ page }) => {
     await preparePage(page, [finalizedPartida])
 
-    await expect(page.getByText('Finalizada')).toBeVisible()
+    await expect(page.getByRole('article').getByText('Finalizada')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Jugar' })).toHaveCount(0)
   })
 
@@ -160,8 +170,8 @@ test.describe('Pantalla de juego', () => {
     await page.route('**/api/personajes', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([character]) })
     })
-    await page.route('**/api/partidas', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([activePartida]) })
+    await page.route(PARTIDAS_URL, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pagina([activePartida])) })
     })
     await page.route(`**/api/partidas/${activePartida.id}/estado`, async (route) => {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'La partida no existe.' }) })
@@ -202,6 +212,7 @@ test.describe('Pantalla de juego', () => {
 
     await page.keyboard.press('ArrowLeft')
     await expect.poll(() => movement.movementRequests.length).toBe(1)
+    await expect(page.getByText('Guardando movimiento...')).toHaveCount(0)
     await page.keyboard.press('ArrowUp')
 
     await expect.poll(() => movement.movementRequests).toEqual(['izquierda', 'arriba'])
@@ -457,8 +468,61 @@ test.describe('Combate cuerpo a cuerpo', () => {
   test('muestra el progreso de experiencia del personaje', async ({ page }) => {
     await prepareMovablePage(page, adjacentState)
 
-    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1 · XP 30/100')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1/3 · XP 30/100')
     await expect(page.getByRole('progressbar', { name: 'Experiencia de Guerrero Bruma' })).toHaveAttribute('aria-valuenow', '30')
+  })
+
+  test('en el nivel máximo acumula experiencia sin mostrar un objetivo', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, personajeNivel: 3, personajeExperiencia: 320, personajeExperienciaSiguienteNivel: null, golpePoderosoDesbloqueado: true })
+
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 3/3 · XP 320 · Nivel máximo')
+  })
+
+  test('Golpe poderoso aparece bloqueado antes del nivel requerido', async ({ page }) => {
+    await prepareMovablePage(page, adjacentState)
+    const requests = []
+    await page.route(`**/api/partidas/${activePartida.id}/golpe-poderoso`, async (route) => {
+      requests.push(route.request().method())
+      await fulfillJson(route, 409, { title: 'Golpe poderoso bloqueado.', detail: 'Golpe poderoso se desbloquea en el nivel 2.' })
+    })
+
+    await expect(page.getByRole('button', { name: 'Golpe poderoso' })).toBeDisabled()
+    await expect(page.getByText('Golpe poderoso bloqueado: se desbloquea en el nivel 2.')).toBeVisible()
+    expect(requests).toHaveLength(0)
+  })
+
+  test('Golpe poderoso disponible: envía la petición sin datos y muestra el daño de la API', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, personajeNivel: 2, golpePoderosoDesbloqueado: true })
+    const requests = []
+    await page.route(`**/api/partidas/${activePartida.id}/golpe-poderoso`, async (route) => {
+      requests.push({ method: route.request().method(), body: route.request().postData() })
+      await fulfillJson(route, 200, {
+        estado: { ...adjacentState, personajeNivel: 2, golpePoderosoDesbloqueado: true, vidaPersonajeActual: 73, vidaEnemigoActual: 13 },
+        danioInfligido: 27,
+        danioRecibido: 7,
+        experienciaGanada: 0,
+      })
+    })
+
+    await page.getByRole('button', { name: 'Golpe poderoso' }).click()
+
+    await expect(page.getByText('Tu Golpe poderoso le hizo 27 de daño a Goblin.')).toBeVisible()
+    await expect(page.getByText('Goblin te golpeó por 7 de daño.')).toBeVisible()
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Vida: 13/40')
+    expect(requests).toEqual([{ method: 'POST', body: null }])
+  })
+
+  test('Golpe poderoso también exige estar junto al enemigo', async ({ page }) => {
+    await prepareMovablePage(page, { ...gameState, personajeNivel: 2, golpePoderosoDesbloqueado: true })
+
+    await expect(page.getByRole('button', { name: 'Golpe poderoso' })).toBeDisabled()
+  })
+
+  test('muestra el enemigo que informa la API', async ({ page }) => {
+    await prepareMovablePage(page, { ...adjacentState, personajeNivel: 3, enemigoId: 3, enemigoNombre: 'Orco', enemigoNivel: 3 })
+
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Orco')
+    await expect(page.getByLabel('Orco', { exact: true })).toBeVisible()
   })
 
   test('una victoria muestra la experiencia y el nivel que informa la API', async ({ page }) => {
@@ -472,13 +536,13 @@ test.describe('Combate cuerpo a cuerpo', () => {
 
     const result = page.getByRole('group', { name: 'Resultado de la partida' })
     await expect(result).toContainText('+100 de experiencia · ¡Nivel 2!')
-    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 2 · XP 30/200')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 2/3 · XP 30/200')
   })
 
   test('una victoria sin subir de nivel no anuncia un nivel nuevo', async ({ page }) => {
-    await prepareMovablePage(page, { ...adjacentState, vidaEnemigoActual: 10, personajeNivel: 3, personajeExperiencia: 0, personajeExperienciaSiguienteNivel: 300 })
+    await prepareMovablePage(page, { ...adjacentState, vidaEnemigoActual: 10, personajeNivel: 3, personajeExperiencia: 0, personajeExperienciaSiguienteNivel: null })
     await mockAttack(page, (route) => fulfillJson(route, 200, {
-      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Victoria', vidaEnemigoActual: 0, personajeNivel: 3, personajeExperiencia: 100, personajeExperienciaSiguienteNivel: 300 }, 10, 0),
+      ...attackResult({ estado: 'Finalizada', resultadoCombate: 'Victoria', vidaEnemigoActual: 0, personajeNivel: 3, personajeExperiencia: 100, personajeExperienciaSiguienteNivel: null }, 10, 0),
       experienciaGanada: 100,
     }))
 
@@ -501,7 +565,7 @@ test.describe('Combate cuerpo a cuerpo', () => {
     const result = page.getByRole('group', { name: 'Resultado de la partida' })
     await expect(result.getByRole('heading', { name: 'Derrota' })).toBeVisible()
     await expect(result).not.toContainText('experiencia')
-    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1 · XP 30/100')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Nivel 1/3 · XP 30/100')
   })
 
   test('al volver al listado muestra el nivel actualizado del personaje', async ({ page }) => {

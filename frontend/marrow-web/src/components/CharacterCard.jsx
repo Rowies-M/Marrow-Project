@@ -14,7 +14,7 @@ export default function CharacterCard({ character, isSelected, onSelect }) {
           <p className="mt-1 text-sm text-violet-300">{character.clase}</p>
         </div>
         <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-slate-200">
-          Nivel {character.nivel}
+          Nivel {character.nivel}/{character.nivelMaximo}
         </span>
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3 text-sm">

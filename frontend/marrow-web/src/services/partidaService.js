@@ -1,15 +1,27 @@
 import { apiRequest } from './apiClient.js'
 
-export function createPartida(token, personajeId) {
+export function createPartida(token, personajeId, dificultad) {
   return apiRequest('/api/partidas', {
     method: 'POST',
     token,
-    body: JSON.stringify({ personajeId }),
+    body: JSON.stringify({ personajeId, dificultad }),
   })
 }
 
-export function getPartidas(token) {
-  return apiRequest('/api/partidas', { token })
+export const DEFAULT_PARTIDAS_QUERY = { estado: '', dificultad: '', orden: 'desc', page: 1 }
+
+const PARTIDAS_PAGE_SIZE = 10
+
+export function getPartidas(token, { estado, dificultad, orden, page }) {
+  const params = new URLSearchParams({ orden, page, pageSize: PARTIDAS_PAGE_SIZE })
+  if (estado) {
+    params.set('estado', estado)
+  }
+  if (dificultad) {
+    params.set('dificultad', dificultad)
+  }
+
+  return apiRequest(`/api/partidas?${params}`, { token })
 }
 
 export function getPartidaById(token, partidaId) {
@@ -30,6 +42,13 @@ export function movePartida(token, partidaId, direccion) {
 
 export function attackPartida(token, partidaId) {
   return apiRequest(`/api/partidas/${partidaId}/ataque`, {
+    method: 'POST',
+    token,
+  })
+}
+
+export function powerStrikePartida(token, partidaId) {
+  return apiRequest(`/api/partidas/${partidaId}/golpe-poderoso`, {
     method: 'POST',
     token,
   })

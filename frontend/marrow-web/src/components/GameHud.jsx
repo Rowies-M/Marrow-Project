@@ -6,9 +6,11 @@ function getHealth({ current, maximum }) {
   return { currentHealth, maximumHealth, percentage }
 }
 
-function HealthOrb({ label, level, health, experience }) {
+function HealthOrb({ label, level, maxLevel, health, experience }) {
   const { currentHealth, maximumHealth, percentage } = getHealth(health)
-  const { percentage: experiencePercentage } = getHealth(experience)
+  // En el nivel máximo el backend no informa un objetivo: la experiencia se acumula y la barra queda completa.
+  const isMaxLevel = experience.maximum === null
+  const experiencePercentage = isMaxLevel ? 100 : getHealth(experience).percentage
 
   return (
     <div className="flex items-center gap-4">
@@ -25,13 +27,15 @@ function HealthOrb({ label, level, health, experience }) {
       <div className="min-w-0 flex-1">
         <p className="truncate font-serif text-lg font-semibold text-amber-100">{label}</p>
         <p className="text-sm font-semibold text-red-200">Vida: {currentHealth}/{maximumHealth}</p>
-        <p className="text-sm text-stone-400">Nivel {level} · XP {experience.current}/{experience.maximum}</p>
+        <p className="text-sm text-stone-400">
+          Nivel {level}/{maxLevel} · {isMaxLevel ? `XP ${experience.current} · Nivel máximo` : `XP ${experience.current}/${experience.maximum}`}
+        </p>
         <div
           className="mt-1 h-1.5 overflow-hidden rounded-sm border border-stone-700 bg-black"
           role="progressbar"
           aria-label={`Experiencia de ${label}`}
           aria-valuemin="0"
-          aria-valuemax={experience.maximum}
+          aria-valuemax={isMaxLevel ? experience.current : experience.maximum}
           aria-valuenow={experience.current}
         >
           <div className="h-full bg-amber-500 transition-[width]" style={{ width: `${experiencePercentage}%` }} />
@@ -65,10 +69,10 @@ function HealthBar({ label, level, health }) {
   )
 }
 
-export default function GameHud({ characterName, characterLevel, characterHealth, characterExperience, enemyName, enemyLevel, enemyHealth }) {
+export default function GameHud({ characterName, characterLevel, characterMaxLevel, characterHealth, characterExperience, enemyName, enemyLevel, enemyHealth }) {
   return (
     <section className="stone-panel grid gap-5 rounded p-4 sm:grid-cols-2 sm:items-center" aria-label="HUD de la partida">
-      <HealthOrb label={`Guerrero ${characterName}`} level={characterLevel} health={characterHealth} experience={characterExperience} />
+      <HealthOrb label={`Guerrero ${characterName}`} level={characterLevel} maxLevel={characterMaxLevel} health={characterHealth} experience={characterExperience} />
       <HealthBar label={enemyName} level={enemyLevel} health={enemyHealth} />
     </section>
   )

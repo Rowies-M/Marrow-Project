@@ -13,6 +13,7 @@ const character = {
   id: 7,
   nombre: 'Bruma',
   nivel: 1,
+  nivelMaximo: 3,
   experiencia: 0,
   vidaActual: 100,
   vidaMaxima: 100,
@@ -45,6 +46,31 @@ test.describe('Personajes', () => {
     await expect(page.getByText('Guerrero')).toBeVisible()
     await expect(page.getByText('Nivel 1')).toBeVisible()
     await expect(page.getByText('100/100')).toBeVisible()
+  })
+
+  test('un error al cargar no se confunde con no tener personajes y se puede reintentar', async ({ page }) => {
+    let shouldFail = true
+    await page.addInitScript((storedSession) => {
+      sessionStorage.setItem('marrow.auth.session', JSON.stringify(storedSession))
+    }, session)
+    await page.route('**/api/personajes', async (route) => {
+      if (shouldFail) {
+        await route.abort()
+        return
+      }
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([character]) })
+    })
+
+    await page.goto('/')
+
+    await expect(page.getByRole('alert')).toContainText('No se pudo conectar con el servidor.')
+    await expect(page.getByText('Todavía no tenés personajes')).toHaveCount(0)
+
+    shouldFail = false
+    await page.getByRole('button', { name: 'Reintentar' }).click()
+
+    await expect(page.getByRole('button', { name: /Bruma/ })).toBeVisible()
   })
 
   test('selecciona un personaje y conserva la selección al recargar', async ({ page }) => {

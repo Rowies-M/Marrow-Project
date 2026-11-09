@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { setUnauthorizedHandler } from '../services/apiClient.js'
 import { loginUser, registerUser } from '../services/authService.js'
 import { AuthContext } from './AuthContext.js'
 
@@ -25,28 +26,45 @@ function persistSession(session) {
   sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
 }
 
+function clearStoredSession() {
+  sessionStorage.removeItem(SESSION_STORAGE_KEY)
+  sessionStorage.removeItem(ACTIVE_CHARACTER_STORAGE_KEY)
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(readStoredSession)
+  const [sessionExpired, setSessionExpired] = useState(false)
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearStoredSession()
+      setSession(null)
+      setSessionExpired(true)
+    })
+    return () => setUnauthorizedHandler(null)
+  }, [])
 
   const value = useMemo(() => ({
     token: session?.token || null,
     user: session?.user || null,
     isAuthenticated: Boolean(session?.token && session?.user),
     isRestoring: false,
+    sessionExpired,
     register: registerUser,
     login: async (credentials) => {
       const response = await loginUser(credentials)
       const nextSession = { token: response.token, user: response.usuario }
       persistSession(nextSession)
+      setSessionExpired(false)
       setSession(nextSession)
       return response
     },
     logout: () => {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY)
-      sessionStorage.removeItem(ACTIVE_CHARACTER_STORAGE_KEY)
+      clearStoredSession()
+      setSessionExpired(false)
       setSession(null)
     },
-  }), [session])
+  }), [session, sessionExpired])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

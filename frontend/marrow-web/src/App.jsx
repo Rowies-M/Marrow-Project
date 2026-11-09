@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './context/useAuth.js'
+import { DEFAULT_PARTIDAS_QUERY } from './services/partidaService.js'
 import { getCharacterById } from './services/personajeService.js'
 import CharacterSelectionPage from './pages/CharacterSelectionPage.jsx'
 import GamePage from './pages/GamePage.jsx'
@@ -9,7 +10,7 @@ import RegisterPage from './pages/RegisterPage.jsx'
 
 const ACTIVE_CHARACTER_STORAGE_KEY = 'marrow.active.character'
 
-function ActiveCharacterHome({ character: selectedCharacter, onBackToSelection, onPartidaSelected, onLogout }) {
+function ActiveCharacterHome({ character: selectedCharacter, partidasQuery, onPartidasQueryChange, onBackToSelection, onPartidaSelected, onLogout }) {
   const { token, user } = useAuth()
   const [character, setCharacter] = useState(selectedCharacter)
   const characterId = selectedCharacter.id
@@ -39,11 +40,11 @@ function ActiveCharacterHome({ character: selectedCharacter, onBackToSelection, 
         <p className="mt-4 text-slate-400">Tu personaje activo es {character.nombre}.</p>
         <div className="mt-8 grid grid-cols-2 gap-3 text-left text-sm sm:grid-cols-4">
           <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Clase</p><p className="mt-1 font-semibold text-white">Guerrero</p></div>
-          <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Nivel</p><p className="mt-1 font-semibold text-white">{character.nivel}</p></div>
+          <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Nivel</p><p className="mt-1 font-semibold text-white">{character.nivel}/{character.nivelMaximo} · {character.experiencia} XP</p></div>
           <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Vida</p><p className="mt-1 font-semibold text-white">{character.vidaActual}/{character.vidaMaxima}</p></div>
           <div className="rounded-xl bg-slate-950/60 p-3"><p className="text-slate-500">Ataque</p><p className="mt-1 font-semibold text-white">{character.ataque}</p></div>
         </div>
-        <PartidasPanel token={token} personajeId={character.id} onPartidaSelected={onPartidaSelected} />
+        <PartidasPanel token={token} personajeId={character.id} isHardUnlocked={character.dificultadDesbloqueada === 'Dificil'} query={partidasQuery} onQueryChange={onPartidasQueryChange} onPartidaSelected={onPartidaSelected} />
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <button className="rounded-xl bg-violet-500 px-5 py-3 font-semibold text-white transition hover:bg-violet-400" type="button" onClick={onBackToSelection}>Volver a selección</button>
           <button className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white" type="button" onClick={onLogout}>Cerrar sesión</button>
@@ -54,12 +55,25 @@ function ActiveCharacterHome({ character: selectedCharacter, onBackToSelection, 
 }
 
 function App() {
-  const { isAuthenticated, isRestoring, token, user, logout } = useAuth()
+  const { isAuthenticated, isRestoring, sessionExpired, token, user, logout } = useAuth()
   const [authMode, setAuthMode] = useState('login')
   const [registrationNotice, setRegistrationNotice] = useState('')
   const [activeCharacter, setActiveCharacter] = useState(null)
   const [selectedPartida, setSelectedPartida] = useState(null)
+  // Vive aquí para conservar filtros y página al entrar y volver de una partida.
+  const [partidasQuery, setPartidasQuery] = useState(DEFAULT_PARTIDAS_QUERY)
   const userId = user?.id
+  const loginNotice = registrationNotice || (sessionExpired ? 'Tu sesión expiró. Volvé a iniciar sesión.' : '')
+
+  // Cubre también la sesión vencida: al volver a entrar no se reabre la partida anterior.
+  const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated)
+  if (wasAuthenticated !== isAuthenticated) {
+    setWasAuthenticated(isAuthenticated)
+    if (!isAuthenticated) {
+      setSelectedPartida(null)
+      setPartidasQuery(DEFAULT_PARTIDAS_QUERY)
+    }
+  }
 
   const handleCharacterSelected = useCallback((character) => {
     if (!userId) {
@@ -74,10 +88,12 @@ function App() {
     sessionStorage.removeItem(ACTIVE_CHARACTER_STORAGE_KEY)
     setActiveCharacter(null)
     setSelectedPartida(null)
+    setPartidasQuery(DEFAULT_PARTIDAS_QUERY)
   }, [])
 
   const handleLogout = useCallback(() => {
     setSelectedPartida(null)
+    setPartidasQuery(DEFAULT_PARTIDAS_QUERY)
     logout()
   }, [logout])
 
@@ -93,10 +109,10 @@ function App() {
         return <GamePage partida={selectedPartida} personaje={selectedCharacter} onBackToPartidas={() => setSelectedPartida(null)} />
       }
 
-      return <ActiveCharacterHome character={selectedCharacter} onBackToSelection={handleBackToSelection} onPartidaSelected={setSelectedPartida} onLogout={handleLogout} />
+      return <ActiveCharacterHome character={selectedCharacter} partidasQuery={partidasQuery} onPartidasQueryChange={setPartidasQuery} onBackToSelection={handleBackToSelection} onPartidaSelected={setSelectedPartida} onLogout={handleLogout} />
     }
 
-    return <CharacterSelectionPage token={token} user={user} activeCharacter={selectedCharacter} onCharacterSelected={handleCharacterSelected} />
+    return <CharacterSelectionPage token={token} user={user} activeCharacter={selectedCharacter} onCharacterSelected={handleCharacterSelected} onLogout={handleLogout} />
   }
 
   if (authMode === 'register') {
@@ -116,10 +132,10 @@ function App() {
         setRegistrationNotice('')
         setAuthMode('register')
       }} />
-      {registrationNotice && (
+      {loginNotice && (
         <div className="fixed bottom-5 left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
           <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-center text-sm text-emerald-200" role="status">
-            {registrationNotice}
+            {loginNotice}
           </p>
         </div>
       )}
