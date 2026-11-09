@@ -1,0 +1,22 @@
+# Prueba local de las imágenes de producción. PostgreSQL no se incluye: se usa una base externa.
+# Copiá backend/.env.example a backend/.env y completá sus valores. Para un PostgreSQL en esta misma
+# máquina, usá Host=host.docker.internal, y para este frontend, Cors__AllowedOrigins__0=http://localhost:8081.
+services:
+  api:
+    build: ./backend/Marrow.API
+    env_file: ./backend/.env
+    # Docker Desktop ya define host.docker.internal; en Linux hace falta declararlo.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./frontend/marrow-web
+      args:
+        VITE_API_URL: http://localhost:8080
+    depends_on:
+      - api
+    ports:
+      - "8081:8080"

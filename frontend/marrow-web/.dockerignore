@@ -1,0 +1,17 @@
+# Se generan dentro de la imagen
+node_modules/
+dist/
+
+# Pruebas
+tests/
+test-results/
+playwright-report/
+playwright.config.js
+
+# Configuración local
+.env
+.env.*
+
+# Archivos que la imagen no necesita
+Dockerfile
+.dockerignore

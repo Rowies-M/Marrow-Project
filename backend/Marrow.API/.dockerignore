@@ -1,0 +1,15 @@
+# Compilados
+**/bin/
+**/obj/
+
+# Configuración que no debe llegar a la imagen: appsettings.json incluye una cadena de conexión local.
+# En Production, sus valores no secretos están en appsettings.Production.json.
+appsettings.json
+appsettings.Development.json
+Properties/launchSettings.json
+.env
+.env.*
+
+# Archivos que la imagen no necesita
+Dockerfile
+.dockerignore
