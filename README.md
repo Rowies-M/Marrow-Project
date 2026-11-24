@@ -4,7 +4,7 @@ Marrow es un RPG web en 2D con vista desde arriba, desarrollado como proyecto fi
 
 El backend es la autoridad del juego: calcula daño, vida, resultados y progreso. El frontend muestra el estado y envía las acciones del jugador.
 
-> **Estado:** el alcance funcional está implementado en código, pero faltan la validación general, aplicar las tres últimas migraciones y el despliegue real. Docker, Neon y CI están preparados, sin ejecutar todavía. El detalle está en la [checklist](docs/requisitos/REQUISITOS_BOOTCAMP.md).
+> **Estado:** el alcance funcional está implementado. Las migraciones están aplicadas en la base local y en Neon, Docker se probó en local, el CI tuvo una ejecución exitosa y el backend y el frontend están desplegados en Render. El contraataque por colisión y los últimos cambios del frontend compilan, pasaron las pruebas del backend y el lint y el build del frontend, y fueron probados manualmente por el autor; todavía no se ejecutaron Playwright ni las pruebas de PostgreSQL sobre ellos, y no están desplegados. El detalle está en la [ficha técnica](docs/MARROW_FICHA_TECNICA.md).
 
 ## Tecnologías
 
@@ -36,7 +36,7 @@ docs/                  Guía técnica, despliegue y seguimiento de requisitos
 - **Cuentas:** registro e inicio de sesión con Microsoft Identity y JWT, y datos aislados por usuario. Personajes y partidas exigen el rol `Jugador`; el rol `Administrador` existe, pero no protege endpoints porque no hay operaciones administrativas.
 - **Personajes:** crear, consultar, cambiar el nombre y eliminar, solo si no tienen partidas. Las estadísticas y el progreso los asigna el backend.
 - **Partidas:** creación, consulta, abandono, filtros por estado y dificultad, orden por fecha y paginación.
-- **Juego:** mapa de 11 × 7 casillas, movimiento en cuatro direcciones con teclado o controles táctiles, combate cuerpo a cuerpo con contraataque y panel de resultado.
+- **Juego:** mapa de 11 × 7 casillas, movimiento en cuatro direcciones con teclado o controles táctiles, combate cuerpo a cuerpo con contraataque y panel de resultado. Intentar entrar en la casilla del enemigo no mueve al Guerrero: el enemigo contraataca y el backend calcula y guarda el daño. Las colisiones pueden terminar en derrota, que no otorga experiencia ni desbloquea la dificultad Difícil.
 - **Enemigos:** el backend asigna uno por partida según el nivel del personaje: Goblin en nivel 1, Esqueleto en nivel 2 y Orco en nivel 3. Sus estadísticas salen del catálogo.
 - **Combate:** ataque básico desde el nivel 1 y Golpe poderoso desde el nivel 2.
 - **Progresión:** 100 XP por victoria, 100 XP para pasar al nivel 2 y 200 XP para pasar al nivel 3, que es el máximo.

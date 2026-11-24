@@ -4,9 +4,11 @@ Documento de referencia con los requisitos técnicos y la información principal
 la [guía técnica](GUIA_TECNICA.md), la [guía de despliegue](DESPLIEGUE.md) y el
 [seguimiento de requisitos del bootcamp](requisitos/REQUISITOS_BOOTCAMP.md).
 
-> **Estado (8 de noviembre de 2026):** el alcance funcional está implementado en código. Falta la validación general:
-> compilar, ejecutar todas las pruebas, aplicar las migraciones pendientes y recorrer el juego contra una base real. Neon,
-> Docker y CI están preparados, pero no se ejecutaron. No hay un despliegue publicado.
+> **Estado (24 de noviembre de 2026):** el alcance funcional está implementado. Las siete migraciones están aplicadas en la
+> base local y en Neon, Docker se probó en local, el CI tuvo una ejecución exitosa y el backend y el frontend están
+> desplegados en Render. El contraataque por colisión y los últimos cambios del frontend compilan, pasaron las pruebas del
+> backend y el lint y el build del frontend, y el autor los probó manualmente. Todavía no se ejecutaron Playwright ni las
+> pruebas de PostgreSQL sobre ellos, y no están desplegados.
 
 ## 1. Qué es Marrow
 
@@ -153,7 +155,10 @@ y `pageSize` (de 1 a 50, por defecto 10). Responde `items`, `page`, `pageSize`, 
 
 - El jugador empieza en la casilla (1, 1) y el enemigo, en (5, 3). El enemigo no se mueve.
 - Cada movimiento es un pedido al backend, nunca uno por fotograma. En el borde, el personaje se queda en su lugar.
-- Entrar en la casilla del enemigo o mover en una partida finalizada responde 409.
+- Si el personaje intenta entrar en la casilla del enemigo, no se mueve y el enemigo contraataca. El backend calcula y guarda
+  el daño, que puede terminar la partida en Derrota. Ese contraataque no otorga experiencia ni afecta el desbloqueo de Difícil.
+- `PATCH /api/partidas/{id}/movimiento` responde 200 con `{ estado, danioRecibido }`; `danioRecibido` es 0 en un movimiento normal.
+- Mover en una partida finalizada, o en una que cambió durante el contraataque, responde 409.
 
 ### Enemigos
 
@@ -170,7 +175,7 @@ El backend elige al crear la partida el enemigo cuyo nivel coincide con el del p
 - Para atacar, el personaje debe estar en una casilla adyacente, sin diagonales.
 - **Daño:** `ataque - defensa`, con un mínimo de 1.
 - **Turno:** el jugador golpea primero. Si el enemigo llega a 0, es Victoria, sin contraataque. Si sobrevive, contraataca, y si
-  el jugador llega a 0, es Derrota.
+  el jugador llega a 0, es Derrota. Intentar entrar en la casilla del enemigo provoca el mismo contraataque, sin golpe previo.
 - **Personaje:** usa su vida, ataque y defensa. Uno nuevo tiene 80, 15 y 5. Subir de nivel no cambia sus estadísticas.
 - **Golpe poderoso:** desde el nivel 2. Duplica el ataque del personaje antes de restar la defensa. No tiene coste ni espera, y
   el backend valida el nivel en cada uso.
@@ -191,6 +196,9 @@ El backend elige al crear la partida el enemigo cuyo nivel coincide con el del p
 - Un personaje nuevo llega al nivel 2 con 1 victoria, y al nivel 3 con 2 victorias más.
 
 ### Resultados con un personaje nuevo
+
+Atacando siempre de la misma forma y sin intentar entrar en la casilla del enemigo: cada intento suma un contraataque que la
+tabla no contempla. Las colisiones repetidas pueden provocar la derrota contra cualquier enemigo.
 
 | Enemigo y dificultad | Solo ataque básico | Solo Golpe poderoso |
 |---|---|---|
@@ -258,7 +266,7 @@ La API no aplica migraciones sola: si falta alguna, no arranca.
 | 6 | `IncorporarIdentityYRoles` | Agrega Identity y conserva a los usuarios existentes |
 | 7 | `ActualizarExperienciaEnemigos` | Cambia a 100 la XP de los tres enemigos |
 
-Las migraciones 5, 6 y 7 están pendientes en la base local. Antes de aplicar la 6 sobre datos existentes, hay que hacer un
+Las siete están aplicadas en la base local y en Neon. Antes de aplicar la 6 sobre otra base con datos, hay que hacer un
 respaldo y comprobar que no haya nombres de usuario ni emails repetidos.
 
 **Al arrancar**, salvo en el entorno `Testing`, la API:
@@ -279,9 +287,27 @@ No elimina usuarios, personajes ni partidas.
 - Escena de 11 × 7 con controles de teclado (WASD o flechas, Espacio para atacar) y controles táctiles en celulares.
 - HUD con vida, nivel actual y máximo, y experiencia. Panel de combate con ataque básico y Golpe poderoso, que aparece bloqueado
   antes del nivel 2.
+- Al ganar o perder, `BattleEndPanel` avisa el final sobre la escena y, al pulsar «Continuar», se abre el panel de resultado.
 - Listado de partidas con filtros, orden, paginación y selector de dificultad para la partida nueva.
 - Estados de carga, listas vacías, errores comprensibles y botón `Reintentar`. Ante un 401, se cierra la sesión.
 - La sesión se guarda en `sessionStorage`.
+
+### Recursos gráficos
+
+Los sprites están en `frontend/marrow-web/src/assets/sprites/`. Son recursos de terceros:
+
+| Personaje | Recurso y autor | Licencia declarada |
+|---|---|---|
+| Guerrero | [Free Knight](https://vibeforge.itch.io/free-knight-top-down-pixel-art-character), de VibeForge | Propia. Permite el uso y la modificación. Restringe la redistribución como recurso independiente |
+| Goblin | Free Goblin Scout, de [Sova Digital](https://sovdigital.itch.io) | Propia. Permite el uso comercial, la modificación y la inclusión en juegos compilados o empaquetados. Restringe la redistribución como recurso independiente |
+| Orco | [Dark Troll Boss](https://iguiw.itch.io/free-dark-troll-boss-pixel-art-character-effects-2d), de iguiw | CC0 1.0. Permite el uso, la modificación y la redistribución |
+| Esqueleto | [Skeleton](https://opengameart.org/content/skeleton-4), de rehcub, en OpenGameArt | CC0 1.0, según la página consultada. Permite el uso, la modificación y la redistribución |
+
+- **Repositorio público:** los cuatro conjuntos se conservan en el repositorio para la evaluación académica. Es una decisión del
+  proyecto y no modifica las condiciones de las licencias.
+- **Salvedad de Guerrero y Goblin:** sus licencias no aclaran expresamente si los PNG, originales o derivados, pueden publicarse
+  en un repositorio público. No se cuenta con una autorización específica de sus autores para hacerlo.
+- **Atribución:** en las licencias consultadas no figura como obligatoria. Esta tabla documenta la procedencia.
 
 ## 13. Pruebas
 
@@ -294,25 +320,35 @@ No elimina usuarios, personajes ni partidas.
 
 - `dotnet test backend/Marrow.sln` ejecuta las dos primeras suites.
 - `npm run test:e2e --prefix frontend/marrow-web` ejecuta Playwright, solo en Windows.
-- Las pruebas modificadas en los últimos bloques, incluidas las de autorización por rol, todavía no se compilaron ni
-  ejecutaron.
+- **Pruebas automatizadas (24 de noviembre de 2026):** `Marrow.sln` compiló en Release con 0 errores y 2 advertencias
+  `CS1573` en `ResultadoPartida.cs`. Pasaron 353 de 353 en `Marrow.API.Tests` y 216 de 216 en
+  `Marrow.API.IntegrationTests`: 569 en total.
+- **Frontend:** `npm run lint` terminó sin observaciones y `npm run build` fue exitoso, con 52 módulos transformados. Las 9
+  importaciones de sprites apuntan a archivos existentes.
+- **Comprobación manual:** el autor probó y aprobó el contraataque, el panel final, el ingreso directo a la partida y las
+  animaciones.
+- **No ejecutado con estos cambios:** `Marrow.API.PostgresTests` y Playwright.
+- Quedan por actualizar una aserción de `Marrow.API.PostgresTests` y una de Playwright, y por revisar los flujos E2E que
+  cambiaron.
 
 ## 14. Infraestructura
 
 | Tema | Estado |
 |---|---|
-| Docker | Dockerfile multietapa para la API (runtime de .NET, puerto 8080) y para el frontend (nginx). `docker-compose.yml` sirve para prueba local y no incluye PostgreSQL. No se construyeron las imágenes |
-| Neon | Guía preparada y conexión local configurable con User Secrets. No se aplicaron migraciones ni se probó la conexión |
-| CI | `.github/workflows/ci.yml`: compila y prueba el backend, y ejecuta lint y build del frontend. No incluye Playwright ni PostgreSQL. No se ejecutó todavía |
-| Despliegue | Pasos documentados en [DESPLIEGUE.md](DESPLIEGUE.md). No hay despliegue continuo ni publicación real |
+| Docker | Dockerfile multietapa para la API (runtime de .NET, puerto 8080) y para el frontend (nginx). `docker-compose.yml` sirve para prueba local y no incluye PostgreSQL. Las imágenes se construyeron y se probaron en local |
+| Neon | Base de producción configurada, con las siete migraciones aplicadas. La conexión local se configura con User Secrets |
+| CI | `.github/workflows/ci.yml`: compila y prueba el backend, y ejecuta lint y build del frontend. No incluye Playwright ni PostgreSQL. Tuvo una ejecución exitosa en GitHub |
+| Despliegue | Backend y frontend desplegados en Render. Cómo se configura: [DESPLIEGUE.md](DESPLIEGUE.md). Los últimos cambios locales todavía no están desplegados. El repositorio no incluye la configuración de Render ni despliegue continuo |
 
 ## 15. Pendiente
 
-1. Validación general: compilar, ejecutar todas las pruebas, lint, E2E y recorrer el juego con la API y PostgreSQL reales.
-2. Aplicar las migraciones pendientes en la base local y las siete en Neon, previo respaldo.
-3. Comprobar la conexión con Neon y el primer arranque de la API.
-4. Confirmar en Git los bloques sin commit, conectar el remoto de GitHub y ejecutar el CI.
-5. Construir las imágenes Docker y hacer el despliegue real.
+1. Actualizar las aserciones pendientes de `Marrow.API.PostgresTests` y Playwright, revisar los flujos E2E que cambiaron y
+   ejecutar ambas suites.
+2. Publicar el contraataque por colisión y los últimos cambios del frontend en GitHub, y desplegarlos en Render.
+
+**Ya completado:** validación general anterior a esos cambios, compilación y pruebas del backend, lint y build del frontend y
+prueba manual con ellos, migraciones en la base local y en Neon, imágenes Docker, CI y despliegue en Render de la versión
+anterior.
 
 **Límites conocidos:**
 

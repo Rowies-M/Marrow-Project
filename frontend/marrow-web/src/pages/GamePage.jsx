@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
+import BattleEndPanel from '../components/BattleEndPanel.jsx'
 import CombatPanel from '../components/CombatPanel.jsx'
 import FormMessage from '../components/FormMessage.jsx'
 import GameHud from '../components/GameHud.jsx'
@@ -16,6 +17,14 @@ function isEnemyAdjacent(gameState) {
   return Math.abs(gameState.personajeX - gameState.enemigoX) + Math.abs(gameState.personajeY - gameState.enemigoY) === 1
 }
 
+const DIRECTION_OFFSETS = { arriba: [0, -1], abajo: [0, 1], izquierda: [-1, 0], derecha: [1, 0] }
+
+// Solo decide la animación: el bloqueo y el contraataque los resuelve el backend.
+function targetsEnemyCell(gameState, direction) {
+  const [offsetX, offsetY] = DIRECTION_OFFSETS[direction] ?? [0, 0]
+  return gameState?.personajeX + offsetX === gameState?.enemigoX && gameState?.personajeY + offsetY === gameState?.enemigoY
+}
+
 export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const { token } = useAuth()
   const isTouchDevice = useIsTouchDevice()
@@ -28,7 +37,36 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
   const [lastAttack, setLastAttack] = useState(null)
   const [reward, setReward] = useState(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
+  // Solo visual: qué animación muestra el Guerrero y qué destellos se reproducen.
+  const [warriorAction, setWarriorAction] = useState(null)
+  const [powerFlashId, setPowerFlashId] = useState(0)
+  const [damageFlashId, setDamageFlashId] = useState(0)
+  const warriorActionIdRef = useRef(0)
+  // Solo visual: contraataque y destello del enemigo.
+  const [enemyAction, setEnemyAction] = useState(null)
+  const [enemyDamageFlashId, setEnemyDamageFlashId] = useState(0)
+  const enemyActionIdRef = useRef(0)
+  // Al ganar o perder, el popup de resultado espera a que el jugador pulse «Continuar».
+  const [showResultDialog, setShowResultDialog] = useState(false)
   const requestInProgressRef = useRef(false)
+
+  const startWarriorAction = useCallback((type) => {
+    warriorActionIdRef.current += 1
+    setWarriorAction({ type, id: warriorActionIdRef.current })
+  }, [])
+
+  const handleWarriorActionEnd = useCallback((id) => {
+    setWarriorAction((current) => (current?.id === id ? null : current))
+  }, [])
+
+  const startEnemyAction = useCallback((type) => {
+    enemyActionIdRef.current += 1
+    setEnemyAction({ type, id: enemyActionIdRef.current })
+  }, [])
+
+  const handleEnemyActionEnd = useCallback((id) => {
+    setEnemyAction((current) => (current?.id === id ? null : current))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -37,6 +75,12 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
       setGameState(null)
       setError('')
       setIsLoading(true)
+      // Cada carga empieza sin restos visuales: el resultado final se deriva solo de esta partida.
+      setShowResultDialog(false)
+      setWarriorAction(null)
+      setEnemyAction(null)
+      setLastAttack(null)
+      setReward(null)
 
       try {
         const response = await getPartidaEstado(token, partida.id)
@@ -65,19 +109,33 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
     requestInProgressRef.current = true
     setIsMoving(true)
+    // Contra la casilla del enemigo el Guerrero no camina: queda quieto y espera el contraataque.
+    if (!targetsEnemyCell(gameState, direction)) {
+      startWarriorAction('walk')
+    }
     setError('')
     setLastAttack(null)
     try {
-      setGameState(await movePartida(token, partida.id, direction))
+      const response = await movePartida(token, partida.id, direction)
+      setGameState(response.estado)
+      // Igual que tras un ataque: la animación y el destello dependen del daño que confirmó el backend.
+      if (response.danioRecibido > 0) {
+        setDamageFlashId((current) => current + 1)
+        startEnemyAction('attack')
+      }
     } catch (requestError) {
       setError(requestError.message)
     } finally {
       requestInProgressRef.current = false
       setIsMoving(false)
     }
-  }, [partida.id, token])
+  }, [gameState, partida.id, startEnemyAction, startWarriorAction, token])
 
   const isActive = gameState?.estado === 'Activa'
+  // Solo una victoria o una derrota de esta partida; un abandono no tiene resultado de combate.
+  const combatOutcome = !isActive && (gameState?.resultadoCombate === 'Victoria' || gameState?.resultadoCombate === 'Derrota')
+    ? gameState.resultadoCombate
+    : null
   const isAdjacent = gameState ? isEnemyAdjacent(gameState) : false
   const characterLevel = gameState?.personajeNivel
 
@@ -90,11 +148,23 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
 
     requestInProgressRef.current = true
     setActiveAttack(attackType)
+    startWarriorAction('attack')
     setError('')
     try {
       const response = await sendAttack(token, partida.id)
       setGameState(response.estado)
       setLastAttack({ danioInfligido: response.danioInfligido, danioRecibido: response.danioRecibido, isPowerStrike: attackType === 'power' })
+      // Los destellos dependen de lo que confirmó el backend, no del botón presionado.
+      if (attackType === 'power') {
+        setPowerFlashId((current) => current + 1)
+      }
+      if (response.danioRecibido > 0) {
+        setDamageFlashId((current) => current + 1)
+        startEnemyAction('attack')
+      }
+      if (response.danioInfligido > 0) {
+        setEnemyDamageFlashId((current) => current + 1)
+      }
       if (response.experienciaGanada > 0) {
         setReward({
           experience: response.experienciaGanada,
@@ -116,7 +186,7 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
       requestInProgressRef.current = false
       setActiveAttack(null)
     }
-  }, [characterLevel, isActive, isAdjacent, partida.id, token])
+  }, [characterLevel, isActive, isAdjacent, partida.id, startEnemyAction, startWarriorAction, token])
 
   const handleAttack = useCallback(() => executeAttack('basic', attackPartida), [executeAttack])
   const handlePowerStrike = useCallback(() => executeAttack('power', powerStrikePartida), [executeAttack])
@@ -192,8 +262,19 @@ export default function GamePage({ partida, personaje, onBackToPartidas }) {
                   enemyName={gameState.enemigoNombre}
                   characterPosition={{ x: gameState.personajeX, y: gameState.personajeY }}
                   enemyPosition={{ x: gameState.enemigoX, y: gameState.enemigoY }}
+                  warriorAction={warriorAction}
+                  powerFlashId={powerFlashId}
+                  damageFlashId={damageFlashId}
+                  onWarriorActionEnd={handleWarriorActionEnd}
+                  enemyAction={enemyAction}
+                  enemyDamageFlashId={enemyDamageFlashId}
+                  onEnemyActionEnd={handleEnemyActionEnd}
+                  combatOutcome={combatOutcome}
                 >
-                  {!isActive && (
+                  {!isActive && combatOutcome && !showResultDialog && (
+                    <BattleEndPanel resultado={combatOutcome} onContinue={() => setShowResultDialog(true)} />
+                  )}
+                  {!isActive && (!combatOutcome || showResultDialog) && (
                     <GameResultPanel resultado={gameState.resultadoCombate} enemyName={gameState.enemigoNombre} reward={reward} onBackToPartidas={onBackToPartidas} />
                   )}
                 </GameScene>

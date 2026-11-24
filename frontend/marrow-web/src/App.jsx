@@ -106,7 +106,8 @@ function App() {
 
     if (selectedCharacter) {
       if (selectedPartida) {
-        return <GamePage partida={selectedPartida} personaje={selectedCharacter} onBackToPartidas={() => setSelectedPartida(null)} />
+        // La key garantiza un estado nuevo, incluidos los efectos visuales, para cada partida.
+        return <GamePage key={selectedPartida.id} partida={selectedPartida} personaje={selectedCharacter} onBackToPartidas={() => setSelectedPartida(null)} />
       }
 
       return <ActiveCharacterHome character={selectedCharacter} partidasQuery={partidasQuery} onPartidasQueryChange={setPartidasQuery} onBackToSelection={handleBackToSelection} onPartidaSelected={setSelectedPartida} onLogout={handleLogout} />

@@ -1,15 +1,16 @@
 # Requisitos del bootcamp: seguimiento en Marrow
 
 Síntesis de `Contenido para proyecto final bootcamp devlights.docx`, organizada según sus cuatro bloques y unidades.
-El estado se revisó el 2026-11-06 sobre el commit `ad15a3d` y los cambios locales posteriores, leyendo el código. Para esta
-revisión no se compiló, no se ejecutaron pruebas y no se consultó ninguna base de datos.
+El estado se revisó el 2026-11-24 sobre el commit `79246da` y los cambios locales posteriores, leyendo el código y los
+resultados de las validaciones, incluida la de ese día. No se consultaron las bases de datos ni los servicios de Render.
 
 **Esto no es una rúbrica de aprobación.** Es un seguimiento de los contenidos del programa. El documento no indica cuáles
 son obligatorios para aprobar, y "Pautas finales del proyecto integrador" aparece sin detalle.
 
 ## Alcance funcional definitivo de Marrow
 
-Es la decisión del proyecto, no un requisito del programa. Todos sus puntos están implementados en código, sin validar todavía en ejecución.
+Es la decisión del proyecto, no un requisito del programa. Todos sus puntos están implementados en código. El flujo principal
+se recorrió en ejecución el 2026-11-09, antes de los cambios locales posteriores a `79246da`.
 
 - Mapa de 11 × 7 casillas y movimiento en cuatro direcciones.
 - Una clase: Guerrero.
@@ -22,7 +23,7 @@ Es la decisión del proyecto, no un requisito del programa. Todos sus puntos est
 
 ## Referencias
 
-- `[x]` **Implementado en código.** Hay evidencia en el repositorio; no significa que ya se haya validado en esta etapa.
+- `[x]` **Implementado en código.** Hay evidencia en el repositorio; si además se comprobó en ejecución, la observación lo dice.
 - `[P]` **Preparado, pero pendiente de ejecutar o configurar.**
 - `[~]` **Parcial o por verificar.** Cuando falta información, la observación dice "Por verificar".
 - `[ ]` **Pendiente de desarrollo.**
@@ -62,7 +63,8 @@ Objetivo del bloque: API RESTful en memoria.
 - [x] Verbos HTTP. GET, POST, PUT, PATCH y DELETE.
 - [x] Códigos de estado. Se usan 200, 201, 204, 400, 401, 403, 404, 409 y 500.
 - [x] Controladores y ruteo.
-- [x] Documentación con Swagger/OpenAPI. Comentarios XML, códigos HTTP y JWT, solo en desarrollo. Falta abrirlo en ejecución.
+- [x] Documentación con Swagger/OpenAPI. Comentarios XML, códigos HTTP y JWT, solo en desarrollo. Se abrió en
+  ejecución el 2026-11-09.
 
 ### Unidad 5: DTOs, validaciones y respuestas HTTP
 
@@ -86,13 +88,12 @@ Objetivo del bloque: base de datos relacional integrada con EF Core, PostgreSQL,
 
 - [x] ORM, `DbContext` y `DbSet`. Ver `MarrowDbContext`.
 - [x] Connection string y provider en `Program.cs`.
-- [P] Ciclo de vida de migraciones. Hay 7 migraciones; `AgregarHabilidadesPersonaje`, `IncorporarIdentityYRoles` y
-  `ActualizarExperienciaEnemigos` no se aplicaron.
+- [x] Ciclo de vida de migraciones. Hay 7 migraciones, aplicadas en la base local y en Neon.
 
 ### Unidad 8: Relaciones entre entidades y CRUD persistido
 
 - [x] Relaciones 1:N con Fluent API.
-- [x] Relaciones N:M con Fluent API. Personaje y Habilidad, por `PersonajeHabilidades`. Migración sin aplicar y sin datos:
+- [x] Relaciones N:M con Fluent API. Personaje y Habilidad, por `PersonajeHabilidades`. Migración aplicada y sin datos:
   Golpe poderoso se decide por nivel y no usa estas tablas.
 - [x] Reemplazo del repositorio en memoria por EF Core. Los repositorios actuales usan `MarrowDbContext`.
 - [~] CRUD asincrónico persistido. Es asincrónico en todas las operaciones existentes, pero completo solo en Personajes.
@@ -109,16 +110,17 @@ Objetivo del bloque: base de datos relacional integrada con EF Core, PostgreSQL,
 
 Objetivo del bloque: API robusta lista para consumir desde el frontend.
 
-- [~] React. Figura en el título del bloque, sin unidad propia. El frontend tiene conectado el flujo principal. Por
-  verificar: recorrido contra la API y PostgreSQL reales.
+- [x] React. Figura en el título del bloque, sin unidad propia. El frontend tiene conectado el flujo principal, recorrido
+  contra la API y PostgreSQL locales el 2026-11-09. Los cambios posteriores del frontend pasaron lint y build, y el
+  autor los probó manualmente; no se ejecutó Playwright.
 
 ### Unidad 10: JWT y CORS
 
 - [x] Autenticación y autorización con JWT. Generación y validación de firma, emisor, audiencia y expiración.
 - [x] Diferencia entre 401 y 403. `401` sin token o con token inválido; `403` con token válido pero sin el rol `Jugador`. Los
   recursos ajenos responden `404`, para no revelar que existen.
-- [x] Microsoft Identity: `UserManager`, `RoleManager` e `IdentityDbContext`. Migración sin aplicar y sin prueba real de
-  inicio de sesión con usuarios existentes.
+- [x] Microsoft Identity: `UserManager`, `RoleManager` e `IdentityDbContext`. Migración aplicada, con registro e
+  inicio de sesión probados con usuarios nuevos. No consta una prueba con una cuenta anterior a la migración.
 - [x] `IJwtService`. Implementado como `IJwtTokenService`.
 - [~] `IAuthService`. Su función la cumple `IUsuarioService`, con otro nombre.
 - [x] `AuthController`.
@@ -126,47 +128,48 @@ Objetivo del bloque: API robusta lista para consumir desde el frontend.
 - [x] `[AllowAnonymous]`. En `AuthController` y `EnemigosController`.
 - [x] Protección por roles. `PersonajesController` y `PartidasController` exigen `[Authorize(Roles = RolesUsuario.Jugador)]`.
   El rol `Administrador` existe y se asigna, pero no protege endpoints porque el alcance no incluye operaciones
-  administrativas. Las pruebas de autorización se modificaron y todavía no se ejecutaron.
-- [x] Candado Bearer en Swagger. Falta probarlo en ejecución.
+  administrativas. Las pruebas de autorización pasaron en la última validación.
+- [x] Candado Bearer en Swagger. Aparece en ejecución; no consta que se haya usado con un token.
 
 ### Unidad 11: Middleware
 
 - [x] Pipeline HTTP. Configurado en `Program.cs`.
 - [x] Manejo global de excepciones. `UseExceptionHandler` y `ManejadorGlobalExcepciones` responden con `ProblemDetails`.
 - [x] Data seeding. Enemigos, roles, administrador por configuración segura, rol `Jugador` para usuarios existentes y corrección de
-  valores inválidos en personajes, de forma idempotente. Todavía no se ejecutó contra una base.
+  valores inválidos en personajes, de forma idempotente. Se ejecutó en la base local y en Neon; en esos arranques no se
+  creó el administrador ni hubo personajes que corregir.
 - [x] CORS para frontends. Los orígenes se configuran por entorno; Production exige indicarlos y no admite `*`.
 
 ### Unidad 12: Seed data, despliegue y cierre
 
 Objetivo de la unidad: Web API desplegada en la nube con base productiva y Docker.
 
-- [P] Dockerfile multietapa. API y frontend configurados, con Docker Compose para prueba local. No se construyeron imágenes
-  ni se levantaron contenedores.
-- [P] PostgreSQL en la nube (Render, Supabase o Neon). Neon está documentado en `docs/DESPLIEGUE.md`. No existe el proyecto ni
-  una conexión real.
-- [ ] Despliegue continuo desde GitHub. No está configurado. Existe CI sin despliegue, y el remoto todavía no está conectado.
-- [P] Migraciones en producción. El procedimiento está documentado; no se ejecutó.
-- [P] Variables de entorno seguras. La configuración por entorno y su validación están listas; falta cargarlas en un despliegue
-  real. `appsettings.json` solo tiene marcadores en su cadena local.
+- [x] Dockerfile multietapa. API y frontend, con Docker Compose para prueba local. Las imágenes se construyeron y se probaron
+  en local el 2026-11-09.
+- [x] PostgreSQL en la nube (Render, Supabase o Neon). Se usa Neon, con la conexión comprobada desde la API en modo Production.
+- [~] Despliegue continuo desde GitHub. El backend y el frontend están desplegados en Render y el código está en GitHub. El
+  repositorio solo incluye CI, sin despliegue. Por verificar en Render: el vínculo con el repositorio y la publicación
+  automática.
+- [x] Migraciones en producción. Las 7 se aplicaron en la rama `production` de Neon el 2026-11-09.
+- [~] Variables de entorno seguras. La configuración por entorno y su validación están implementadas, y `appsettings.json` solo
+  tiene marcadores en su cadena local. Por verificar: los valores cargados en Render.
 - [~] Pautas finales del proyecto integrador. Por verificar: el documento no las detalla.
 
 ## Resumen de pendientes
 
 **Preparado, falta ejecutar o configurar**
 
-- Aplicar las migraciones `AgregarHabilidadesPersonaje`, `IncorporarIdentityYRoles` y `ActualizarExperienciaEnemigos`.
-- Probar Identity, roles y datos iniciales con una base real.
-- Recorrer en ejecución los tres enemigos, Golpe poderoso y el nivel máximo.
-- Crear el proyecto en Neon y comprobar la conexión.
-- Construir las imágenes Docker y levantar los contenedores.
-- Conectar el remoto de GitHub y ejecutar el CI por primera vez.
-- Realizar el despliegue real.
-- Preparar y ejecutar las pruebas de PostgreSQL real (`Marrow.API.PostgresTests`).
+- Subir a GitHub y desplegar los cambios locales posteriores a `79246da`.
+- Corregir una prueba de `Marrow.API.PostgresTests` y una de Playwright, revisar los flujos E2E que cambiaron y ejecutar ambas
+  suites con esos cambios.
 
-**Pendiente de desarrollo**
+**Por verificar**
 
-- Despliegue continuo desde GitHub.
+- El vínculo de Render con GitHub, la publicación automática y las variables cargadas.
+- El inicio de sesión con una cuenta anterior a la migración de Identity.
+- El uso del candado de Swagger con un token.
+- Los puntos marcados "Por verificar" sin evidencia en el repositorio: el modelo de dominio en consola, la etapa de API en
+  memoria y las pautas finales.
 
 **Decisiones que conviene consultar con el docente**
 
@@ -183,7 +186,20 @@ Estos puntos no figuran como requisitos en el documento original, pero forman pa
 - [x] Logging con `ILogger<T>`. Inicio, detención, datos iniciales, autenticación, partidas y errores, sin datos sensibles.
 - [x] Estados de carga, vacíos y errores en el frontend.
 - [x] Pruebas automatizadas con xUnit y Playwright. Las de Playwright no están integradas en GitHub Actions.
-- [P] Integración continua con GitHub Actions. Configurada; todavía no se ejecutó en GitHub.
+- [x] Integración continua con GitHub Actions. Su ejecución sobre `79246da` fue exitosa.
+- [x] Contraataque por colisión y últimos cambios del frontend: sprites, `BattleEndPanel` e ingreso directo a la partida nueva.
+  Compilados y probados solo en local, con las pruebas del backend y una comprobación manual del autor; sin Playwright y sin
+  desplegar.
 - [x] Documentación del proyecto. `README.md`, `docs/GUIA_TECNICA.md` y `docs/DESPLIEGUE.md`.
 
-**Validación:** esta checklist no registra resultados de pruebas. La validación general del estado actual todavía está pendiente.
+**Validación de los cambios locales (2026-11-24):**
+
+- **Automatizada:** `Marrow.sln` compiló en Release con 0 errores y 2 advertencias `CS1573` en `ResultadoPartida.cs`. Pasaron
+  353 de 353 pruebas de `Marrow.API.Tests` y 216 de 216 de `Marrow.API.IntegrationTests`: 569 en total. El lint y el build del
+  frontend terminaron sin errores.
+- **Manual:** el autor probó y aprobó el contraataque, el panel final, el ingreso directo a la partida y las animaciones. También
+  se comprobó que las 9 importaciones de sprites apuntan a archivos existentes.
+- **No ejecutada:** `Marrow.API.PostgresTests` y Playwright.
+
+**Validación anterior (2026-11-09 al 2026-11-11, sobre el código de `79246da`):** 548 de 548 pruebas del backend, 13 de 14 de
+PostgreSQL real, 64 de 65 E2E, y lint y build del frontend sin errores. Las dos fallas son de pruebas que hay que corregir.

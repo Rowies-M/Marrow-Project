@@ -81,6 +81,22 @@ public static class ReglasCombate
             return new ResolucionAtaque(vidaJugador, 0, danioInfligido, 0, ResultadoCombate.Victoria);
         }
 
+        return ResolverContraataque(estadisticas, vidaJugador, vidaEnemigoRestante) with { DanioInfligido = danioInfligido };
+    }
+
+    /// <summary>
+    /// Golpe del enemigo sin ataque previo del jugador: se usa cuando el jugador intenta ocupar la casilla del enemigo.
+    /// Es el mismo contraataque que sigue a un ataque, así que no puede producir una victoria.
+    /// </summary>
+    public static ResolucionAtaque ResolverContraataque(
+        EstadisticasCombate estadisticas,
+        int vidaJugador,
+        int vidaEnemigo)
+    {
+        ArgumentNullException.ThrowIfNull(estadisticas);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(vidaJugador);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(vidaEnemigo);
+
         var danioRecibido = Math.Min(
             CalcularDanio(estadisticas.AtaqueEnemigo, estadisticas.DefensaJugador),
             vidaJugador);
@@ -88,8 +104,8 @@ public static class ReglasCombate
 
         return new ResolucionAtaque(
             vidaJugadorRestante,
-            vidaEnemigoRestante,
-            danioInfligido,
+            vidaEnemigo,
+            0,
             danioRecibido,
             vidaJugadorRestante == 0 ? ResultadoCombate.Derrota : null);
     }

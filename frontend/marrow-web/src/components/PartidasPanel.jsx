@@ -103,10 +103,11 @@ export default function PartidasPanel({ token, personajeId, isHardUnlocked, quer
     setIsCreating(true)
 
     try {
-      await createPartida(token, personajeId, selectedDifficulty)
-      // Sin filtros y en la primera página, para que la partida nueva quede a la vista.
+      const partida = await createPartida(token, personajeId, selectedDifficulty)
+      // Sin filtros y en la primera página, para que la partida nueva quede a la vista al volver.
       onQueryChange(DEFAULT_PARTIDAS_QUERY)
-      setReloadCount((current) => current + 1)
+      // Se entra directamente: al volver, el panel se monta de nuevo y recarga el listado.
+      onPartidaSelected(partida)
     } catch (requestError) {
       setActionError(requestError.message)
     } finally {

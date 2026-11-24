@@ -596,13 +596,14 @@ public class PartidaServiceTests
     [InlineData(5, 4, "arriba")]
     [InlineData(4, 3, "derecha")]
     [InlineData(6, 3, "izquierda")]
-    public async Task Mover_HaciaLaCeldaDelEnemigo_InformaConflictoSinCambiarCoordenadas(
+    public async Task Mover_HaciaLaCeldaDelEnemigo_NoSeMueveYElEnemigoContraataca(
         int x,
         int y,
         string direccion)
     {
         var partida = CrearPartidaEn(x, y);
-        var servicio = CrearServicio(new PartidaRepositoryFalso(partida));
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var servicio = CrearServicio(repositorio);
 
         var resultado = await servicio.MoverAsync(
             UsuarioId,
@@ -610,14 +611,21 @@ public class PartidaServiceTests
             new MoverPartidaRequest { Direccion = direccion });
 
         Assert.NotNull(resultado);
-        Assert.True(resultado.ConcurrenciaPerdida);
+        Assert.False(resultado.ConcurrenciaPerdida);
+        Assert.Equal(10, resultado.DanioRecibido);
+        Assert.Equal(74, resultado.Estado.VidaPersonajeActual);
+        Assert.Equal(30, resultado.Estado.VidaEnemigoActual);
         Assert.Equal(x, resultado.Estado.PersonajeX);
         Assert.Equal(y, resultado.Estado.PersonajeY);
         Assert.Equal(x, partida.PersonajeX);
         Assert.Equal(y, partida.PersonajeY);
         Assert.Equal(5, partida.EnemigoX);
         Assert.Equal(3, partida.EnemigoY);
+        Assert.Equal(74, partida.VidaPersonajeActual);
+        Assert.Equal(30, partida.VidaEnemigoActual);
         Assert.Equal(EstadoPartida.Activa, partida.Estado);
+        Assert.Null(partida.ResultadoCombate);
+        Assert.Equal(1, repositorio.LlamadasAplicarAtaque);
     }
 
     [Theory]
@@ -625,7 +633,7 @@ public class PartidaServiceTests
     [InlineData(5, 4, "arriba")]
     [InlineData(4, 3, "derecha")]
     [InlineData(6, 3, "izquierda")]
-    public async Task EndpointMover_HaciaLaCeldaDelEnemigo_Devuelve409SinCambiarCoordenadas(
+    public async Task EndpointMover_HaciaLaCeldaDelEnemigo_Devuelve200ConContraataqueSinCambiarCoordenadas(
         int x,
         int y,
         string direccion)
@@ -638,25 +646,136 @@ public class PartidaServiceTests
             new MoverPartidaRequest { Direccion = direccion },
             CancellationToken.None);
 
-        var conflicto = Assert.IsType<ConflictObjectResult>(respuesta);
-        Assert.Equal(StatusCodes.Status409Conflict, conflicto.StatusCode);
+        var ok = Assert.IsType<OkObjectResult>(respuesta);
+        var cuerpo = Assert.IsType<MovimientoPartidaResponse>(ok.Value);
+        Assert.Equal(10, cuerpo.DanioRecibido);
+        Assert.Equal(74, cuerpo.Estado.VidaPersonajeActual);
+        Assert.Equal(x, cuerpo.Estado.PersonajeX);
+        Assert.Equal(y, cuerpo.Estado.PersonajeY);
         Assert.Equal(x, partida.PersonajeX);
         Assert.Equal(y, partida.PersonajeY);
     }
 
     [Fact]
-    public async Task Mover_IntentosRepetidosContraElEnemigo_NuncaCambianLasCoordenadas()
+    public async Task Mover_IntentosRepetidosContraElEnemigo_NuncaCambianLasCoordenadasYCadaUnoContraatacaUnaVez()
     {
         var partida = CrearPartidaEn(4, 3);
-        var servicio = CrearServicio(new PartidaRepositoryFalso(partida));
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var servicio = CrearServicio(repositorio);
 
-        for (var intento = 0; intento < 3; intento++)
+        for (var intento = 1; intento <= 3; intento++)
         {
-            await servicio.MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+            var resultado = await servicio.MoverAsync(UsuarioId, PartidaId, MoverDerecha);
 
+            Assert.NotNull(resultado);
+            Assert.Equal(10, resultado.DanioRecibido);
             Assert.Equal(4, partida.PersonajeX);
             Assert.Equal(3, partida.PersonajeY);
+            Assert.Equal(84 - (10 * intento), partida.VidaPersonajeActual);
+            Assert.Equal(intento, repositorio.LlamadasAplicarAtaque);
         }
+    }
+
+    [Theory]
+    [InlineData(Dificultad.Normal, 10)]
+    [InlineData(Dificultad.Dificil, 15)]
+    public async Task Mover_HaciaLaCeldaDelEnemigo_UsaElAtaqueDelEnemigoSegunLaDificultad(
+        Dificultad dificultad,
+        int danioEsperado)
+    {
+        var partida = CrearPartidaEnCombate(4, 3, dificultad, 80, 40);
+
+        var resultado = await CrearServicio(new PartidaRepositoryFalso(partida)).MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+
+        Assert.NotNull(resultado);
+        Assert.Equal(danioEsperado, resultado.DanioRecibido);
+        Assert.Equal(80 - danioEsperado, partida.VidaPersonajeActual);
+        Assert.Equal(40, partida.VidaEnemigoActual);
+    }
+
+    [Theory]
+    [InlineData(10, 10)]
+    [InlineData(5, 5)]
+    public async Task Mover_ContraataqueMataAlJugador_EsDerrotaFinalizadaSinDesbloqueoNiExperiencia(
+        int vidaJugador,
+        int danioEsperado)
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, vidaJugador, 40);
+        var repositorio = new PartidaRepositoryFalso(partida);
+
+        var resultado = await CrearServicio(repositorio).MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+
+        Assert.NotNull(resultado);
+        Assert.False(resultado.ConcurrenciaPerdida);
+        Assert.Equal(danioEsperado, resultado.DanioRecibido);
+        Assert.Equal(0, resultado.Estado.VidaPersonajeActual);
+        Assert.Equal(40, resultado.Estado.VidaEnemigoActual);
+        Assert.Equal(ResultadoCombate.Derrota, resultado.Estado.ResultadoCombate);
+        Assert.Equal(EstadoPartida.Finalizada, resultado.Estado.Estado);
+        Assert.False(repositorio.UltimoDesbloqueoSolicitado);
+        Assert.Null(repositorio.UltimoProgresoSolicitado);
+        Assert.Equal(Dificultad.Normal, partida.Personaje.DificultadDesbloqueada);
+    }
+
+    [Fact]
+    public async Task Mover_ContraEnemigoTrasUnaDerrota_InformaConflictoSinOtroContraataque()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 10, 40);
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var servicio = CrearServicio(repositorio);
+        await servicio.MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+
+        var resultado = await servicio.MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+
+        Assert.NotNull(resultado);
+        Assert.True(resultado.ConcurrenciaPerdida);
+        Assert.Equal(0, resultado.DanioRecibido);
+        Assert.Equal(1, repositorio.LlamadasAplicarAtaque);
+        Assert.Equal(0, partida.VidaPersonajeActual);
+    }
+
+    [Fact]
+    public async Task Mover_LaPartidaCambiaAntesDelContraataque_InformaConflictoSinAplicarlo()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        var repositorio = new PartidaRepositoryFalso(partida)
+        {
+            AntesDeAplicarAtaque = () => partida.VidaPersonajeActual = 50
+        };
+
+        var resultado = await CrearServicio(repositorio).MoverAsync(UsuarioId, PartidaId, MoverDerecha);
+
+        Assert.NotNull(resultado);
+        Assert.True(resultado.ConcurrenciaPerdida);
+        Assert.Equal(0, resultado.DanioRecibido);
+        Assert.Equal(50, partida.VidaPersonajeActual);
+        Assert.Equal(EstadoPartida.Activa, partida.Estado);
+    }
+
+    [Fact]
+    public async Task EndpointMover_LaPartidaCambiaAntesDelContraataque_Devuelve409()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        var controlador = CrearControlador(new PartidaRepositoryFalso(partida)
+        {
+            AntesDeAplicarAtaque = () => partida.VidaPersonajeActual = 50
+        });
+
+        var respuesta = await controlador.Mover(PartidaId, MoverDerecha, CancellationToken.None);
+
+        VerificarConflicto(
+            respuesta,
+            "La partida cambió.",
+            "La partida cambió mientras se procesaba el movimiento. Volvé a intentarlo.");
+    }
+
+    [Fact]
+    public async Task Mover_ContraataqueSinLecturaPosterior_LanzaErrorDeConsistencia()
+    {
+        var partida = CrearPartidaEnCombate(4, 3, Dificultad.Normal, 80, 40);
+        var servicio = CrearServicio(new PartidaRepositoryFalso(partida) { LecturaNullTrasAtaque = true });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => servicio.MoverAsync(UsuarioId, PartidaId, MoverDerecha));
     }
 
     [Theory]
@@ -766,16 +885,37 @@ public class PartidaServiceTests
     [InlineData(5, 4, "arriba")]
     [InlineData(4, 3, "derecha")]
     [InlineData(6, 3, "izquierda")]
-    public async Task EndpointMover_Colision_MuestraElMensajeDeCasillaOcupada(int x, int y, string direccion)
+    public async Task EndpointMover_PartidaFinalizadaJuntoAlEnemigo_NoContraataca(int x, int y, string direccion)
     {
-        var controlador = CrearControlador(new PartidaRepositoryFalso(CrearPartidaEn(x, y)));
+        var partida = CrearPartidaEn(x, y);
+        partida.Estado = EstadoPartida.Finalizada;
+        var repositorio = new PartidaRepositoryFalso(partida);
+        var controlador = CrearControlador(repositorio);
 
         var respuesta = await controlador.Mover(
             PartidaId,
             new MoverPartidaRequest { Direccion = direccion },
             CancellationToken.None);
 
-        VerificarConflicto(respuesta, "Movimiento no permitido.", "La casilla está ocupada por el enemigo.");
+        Assert.IsType<ConflictObjectResult>(respuesta);
+        Assert.Equal(0, repositorio.LlamadasAplicarAtaque);
+        Assert.Equal(84, partida.VidaPersonajeActual);
+    }
+
+    [Fact]
+    public async Task EndpointMover_MovimientoNormal_Devuelve200SinContraataque()
+    {
+        var repositorio = new PartidaRepositoryFalso(CrearPartida());
+        var controlador = CrearControlador(repositorio);
+
+        var respuesta = await controlador.Mover(PartidaId, MoverDerecha, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(respuesta);
+        var cuerpo = Assert.IsType<MovimientoPartidaResponse>(ok.Value);
+        Assert.Equal(0, cuerpo.DanioRecibido);
+        Assert.Equal(2, cuerpo.Estado.PersonajeX);
+        Assert.Equal(84, cuerpo.Estado.VidaPersonajeActual);
+        Assert.Equal(0, repositorio.LlamadasAplicarAtaque);
     }
 
     [Fact]

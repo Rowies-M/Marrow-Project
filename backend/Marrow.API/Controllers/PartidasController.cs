@@ -123,13 +123,16 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
     /// <param name="id">Identificador de la partida.</param>
     /// <param name="request">Dirección del movimiento.</param>
     /// <param name="cancellationToken">Cancelación del pedido.</param>
-    /// <response code="200">Estado actualizado de la partida.</response>
+    /// <response code="200">
+    /// Estado actualizado de la partida. Si el destino es la casilla del enemigo, el personaje no se mueve,
+    /// el enemigo contraataca y el daño se informa en danioRecibido.
+    /// </response>
     /// <response code="400">Dirección inválida.</response>
     /// <response code="401">Token ausente o inválido.</response>
     /// <response code="404">La partida no existe o es de otro usuario.</response>
-    /// <response code="409">La casilla está ocupada por el enemigo o la partida ya finalizó.</response>
+    /// <response code="409">La partida ya finalizó o cambió durante el pedido.</response>
     [HttpPatch("{id:int}/movimiento")]
-    [ProducesResponseType(typeof(EstadoPartidaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(MovimientoPartidaResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -155,14 +158,15 @@ public class PartidasController(IPartidaService partidaService) : ControllerBase
             var partidaActiva = resultado.Estado.Estado == Models.EstadoPartida.Activa;
             return Conflict(new ProblemDetails
             {
-                Title = partidaActiva ? "Movimiento no permitido." : "La partida no está activa.",
+                // Con la partida activa solo se llega aquí si cambió mientras se aplicaba el contraataque.
+                Title = partidaActiva ? "La partida cambió." : "La partida no está activa.",
                 Detail = partidaActiva
-                    ? "La casilla está ocupada por el enemigo."
+                    ? "La partida cambió mientras se procesaba el movimiento. Volvé a intentarlo."
                     : "No se puede mover el personaje porque la partida ya fue finalizada."
             });
         }
 
-        return Ok(resultado.Estado);
+        return Ok(new MovimientoPartidaResponse(resultado.Estado, resultado.DanioRecibido));
     }
 
     /// <summary>Abandona una partida propia. No otorga resultado de combate ni experiencia.</summary>

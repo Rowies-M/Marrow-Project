@@ -1,0 +1,22 @@
+Sprites del Orco de Marrow
+==========================
+
+Recurso: FREE - Dark Troll Boss Pixel Art Character & Effects (2D)
+Autor: iguiw
+Fuente: https://iguiw.itch.io/free-dark-troll-boss-pixel-art-character-effects-2d
+Licencia: dedicación al dominio público, equivalente a CC0 1.0 Universal
+          (https://creativecommons.org/publicdomain/zero/1.0/)
+
+Archivos de este directorio:
+- idle.png: troll/idle.png del paquete, sin cambios (8 × 2 cuadros de 256 × 256 px).
+- attack.png: troll/golpe.png del paquete, sin cambios (16 cuadros de 256 × 256 px en las dos primeras filas).
+- troll_idle_front.png: primer cuadro de idle.png (256 × 256 px), usado como reposo fijo de frente.
+- troll_attack_strip.png: las dos filas de attack.png unidas en una tira de 16 cuadros (4096 × 256 px).
+Los recortes copian los píxeles originales sin escalar ni modificar la transparencia.
+
+Texto de licencia incluido en el paquete (archivo LISENCE.txt):
+
+The licensor releases this work into the public domain by waiving all of their rights to the work
+worldwide under copyright law, including all related and neighboring rights, to the extent allowed
+by law. You can copy, modify, distribute and perform the work, even for commercial purposes, all
+without asking permission.

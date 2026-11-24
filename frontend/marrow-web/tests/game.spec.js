@@ -121,7 +121,7 @@ async function prepareMovablePage(page, initialState = gameState, movementRespon
       personajeX: Math.max(0, Math.min(10, currentState.personajeX + offsetX)),
       personajeY: Math.max(0, Math.min(6, currentState.personajeY + offsetY)),
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentState) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ estado: currentState, danioRecibido: 0 }) })
   })
 
   await page.goto('/')
@@ -279,15 +279,18 @@ test.describe('Pantalla de juego', () => {
     expect(movement.movementRequests).toEqual(['derecha'])
   })
 
-  test('no atraviesa la casilla ocupada por el enemigo', async ({ page }) => {
-    await prepareMovablePage(page, { ...gameState, personajeX: 4, personajeY: 3 }, {
-      status: 409,
-      body: { detail: 'La casilla está ocupada por el enemigo.' },
+  test('no atraviesa la casilla ocupada por el enemigo y recibe su contraataque', async ({ page }) => {
+    const blockedState = { ...gameState, personajeX: 4, personajeY: 3 }
+    const movement = await prepareMovablePage(page, blockedState, {
+      status: 200,
+      body: { estado: { ...blockedState, vidaPersonajeActual: 69 }, danioRecibido: 15 },
     })
 
     await page.keyboard.press('ArrowRight')
 
-    await expect(page.getByRole('alert')).toContainText('La casilla está ocupada por el enemigo.')
+    await expect.poll(() => movement.movementRequests).toEqual(['derecha'])
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Vida: 69/100')
+    await expect(page.getByRole('alert')).toHaveCount(0)
     await expect(page.getByLabel('Guerrero Bruma', { exact: true })).toHaveAttribute('style', /left: 40%; top: 50%;/)
   })
 
@@ -633,12 +636,18 @@ test.describe('Controles táctiles', () => {
     await expect(page.getByLabel('Guerrero Bruma', { exact: true })).toHaveAttribute('style', /left: 0%; top: 0%;/)
   })
 
-  test('muestra el rechazo por la casilla del enemigo junto a los controles', async ({ page }) => {
-    await prepareMovablePage(page, adjacentState, { status: 409, body: { detail: 'La casilla está ocupada por el enemigo.' } })
+  test('el contraataque por la casilla del enemigo puede terminar la partida en derrota', async ({ page }) => {
+    await prepareMovablePage(page, adjacentState, {
+      status: 200,
+      body: {
+        estado: { ...adjacentState, vidaPersonajeActual: 0, estado: 'Finalizada', resultadoCombate: 'Derrota' },
+        danioRecibido: 84,
+      },
+    })
 
     await moveButton(page, 'Mover a la derecha').tap()
 
-    await expect(page.getByRole('alert')).toContainText('La casilla está ocupada por el enemigo.')
+    await expect(page.getByRole('region', { name: 'HUD de la partida' })).toContainText('Vida: 0/100')
     await expect(page.getByLabel('Guerrero Bruma', { exact: true })).toHaveAttribute('style', /left: 40%; top: 50%;/)
   })
 
@@ -650,7 +659,7 @@ test.describe('Controles táctiles', () => {
     await page.route(`**/api/partidas/${activePartida.id}/movimiento`, async (route) => {
       requests += 1
       await pending
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...gameState, personajeX: 2 }) })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ estado: { ...gameState, personajeX: 2 }, danioRecibido: 0 }) })
     })
 
     await moveButton(page, 'Mover a la derecha').tap()

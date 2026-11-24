@@ -154,7 +154,60 @@ public sealed class PartidaService(
                 : throw new InvalidOperationException("La partida movida no se pudo leer después de actualizarla.");
         }
 
+        // El personaje no puede ocupar la casilla del enemigo: no se mueve y el enemigo contraataca.
+        if (filasActualizadas == 0
+            && partida.Estado == EstadoPartida.Activa
+            && partida.PersonajeX + deltaX == partida.EnemigoX
+            && partida.PersonajeY + deltaY == partida.EnemigoY)
+        {
+            return await AplicarContraataqueAsync(partida, usuarioId, cancellationToken);
+        }
+
         return new MovimientoPartidaResult(MapearEstado(partida), filasActualizadas == 0);
+    }
+
+    // Usa la misma escritura condicional que un ataque: solo se aplica si la partida sigue activa y sin cambios
+    // desde la lectura, así que un pedido repetido o concurrente no puede contraatacar dos veces sobre el mismo estado.
+    private async Task<MovimientoPartidaResult?> AplicarContraataqueAsync(
+        Partida leida,
+        int usuarioId,
+        CancellationToken cancellationToken)
+    {
+        var resolucion = ReglasCombate.ResolverContraataque(
+            ReglasCombate.ObtenerEstadisticas(leida.Dificultad, leida.Personaje, leida.Enemigo),
+            leida.VidaPersonajeActual,
+            leida.VidaEnemigoActual);
+
+        // Un contraataque nunca da la victoria: no hay experiencia ni desbloqueo de Difícil.
+        var filasActualizadas = await partidaRepository.AplicarAtaqueAsync(
+            leida,
+            usuarioId,
+            resolucion.VidaJugador,
+            resolucion.VidaEnemigo,
+            resolucion.Resultado,
+            desbloquearDificil: false,
+            progreso: null,
+            cancellationToken);
+        var actual = await partidaRepository.ObtenerEstadoAsync(leida.Id, usuarioId, cancellationToken);
+
+        if (actual is null)
+        {
+            return filasActualizadas == 0
+                ? null
+                : throw new InvalidOperationException("La partida no se pudo leer después del contraataque.");
+        }
+
+        if (filasActualizadas == 0)
+        {
+            return new MovimientoPartidaResult(MapearEstado(actual), ConcurrenciaPerdida: true);
+        }
+
+        if (resolucion.Resultado is not null)
+        {
+            logger.LogInformation("Partida {PartidaId} finalizada con resultado {Resultado}.", leida.Id, resolucion.Resultado);
+        }
+
+        return new MovimientoPartidaResult(MapearEstado(actual), ConcurrenciaPerdida: false, resolucion.DanioRecibido);
     }
 
     public async Task<FinalizacionPartidaResult?> FinalizarAsync(

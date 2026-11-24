@@ -230,6 +230,63 @@ public class ReglasCombateTests
         Assert.Equal(ResultadoCombate.Derrota, resolucion.Resultado);
     }
 
+    [Theory]
+    [InlineData(Dificultad.Normal, 1, 1)]
+    [InlineData(Dificultad.Normal, 2, 3)]
+    [InlineData(Dificultad.Normal, 3, 7)]
+    [InlineData(Dificultad.Dificil, 1, 2)]
+    [InlineData(Dificultad.Dificil, 2, 7)]
+    [InlineData(Dificultad.Dificil, 3, 13)]
+    public void ResolverContraataque_SoloDaniaAlJugadorYNoTocaAlEnemigo(
+        Dificultad dificultad,
+        int nivelEnemigo,
+        int danioRecibidoEsperado)
+    {
+        var estadisticas = ObtenerEstadisticas(dificultad, nivelEnemigo);
+
+        var resolucion = ReglasCombate.ResolverContraataque(estadisticas, 80, estadisticas.VidaEnemigo);
+
+        Assert.Equal(80 - danioRecibidoEsperado, resolucion.VidaJugador);
+        Assert.Equal(estadisticas.VidaEnemigo, resolucion.VidaEnemigo);
+        Assert.Equal(0, resolucion.DanioInfligido);
+        Assert.Equal(danioRecibidoEsperado, resolucion.DanioRecibido);
+        Assert.Null(resolucion.Resultado);
+    }
+
+    [Fact]
+    public void ResolverContraataque_DaElMismoDanioQueElContraataqueTrasUnAtaque()
+    {
+        var estadisticas = ObtenerEstadisticas(Dificultad.Dificil, 3);
+
+        var trasAtaque = ReglasCombate.ResolverAtaque(estadisticas, 80, 160);
+        var sinAtaque = ReglasCombate.ResolverContraataque(estadisticas, 80, 160);
+
+        Assert.Equal(trasAtaque.DanioRecibido, sinAtaque.DanioRecibido);
+    }
+
+    [Theory]
+    [InlineData(13, 13)]
+    [InlineData(5, 5)]
+    [InlineData(1, 1)]
+    public void ResolverContraataque_MataAlJugador_EsDerrotaSinVidaNegativa(int vidaJugador, int danioRecibidoEsperado)
+    {
+        var resolucion = ReglasCombate.ResolverContraataque(ObtenerEstadisticas(Dificultad.Dificil, 3), vidaJugador, 160);
+
+        Assert.Equal(0, resolucion.VidaJugador);
+        Assert.Equal(160, resolucion.VidaEnemigo);
+        Assert.Equal(danioRecibidoEsperado, resolucion.DanioRecibido);
+        Assert.Equal(ResultadoCombate.Derrota, resolucion.Resultado);
+    }
+
+    [Theory]
+    [InlineData(0, 40)]
+    [InlineData(80, 0)]
+    public void ResolverContraataque_ConVidaAgotada_RechazaLosValores(int vidaJugador, int vidaEnemigo)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => ReglasCombate.ResolverContraataque(ObtenerEstadisticas(Dificultad.Normal, 1), vidaJugador, vidaEnemigo));
+    }
+
     [Fact]
     public void ResolverAtaque_JugadorSobreviveConUnPuntoDeVida_NoTerminaElCombate()
     {

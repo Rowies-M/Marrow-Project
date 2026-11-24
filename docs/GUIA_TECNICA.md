@@ -187,7 +187,7 @@ var consulta = context.Partidas.AsNoTracking()
 - **`AsNoTracking`:** evita el seguimiento de cambios en lecturas.
 - **`Include`:** carga relaciones cuando se usan. `ObtenerEstadoAsync` incluye personaje y enemigo porque la respuesta necesita sus datos. El listado no lo usa, porque no devuelve esos datos.
 
-**Actualizaciones atómicas:** movimiento, ataque y abandono usan `ExecuteUpdateAsync`, con condiciones en el `WHERE`. Si otra petición cambió la partida primero, la actualización no modifica filas y la API responde 409.
+**Actualizaciones atómicas:** movimiento, ataque y abandono usan `ExecuteUpdateAsync`, con condiciones en el `WHERE`. Si la actualización no modifica filas, el servicio vuelve a leer la partida para saber por qué. En un ataque o un abandono responde `409`, o `404` si la partida no existe o es ajena. En un movimiento puede ser una colisión con el enemigo, que aplica el contraataque y responde `200`; una partida finalizada responde `409`, y una inexistente o ajena, `404`. Si la partida cambia mientras se aplica el contraataque, también responde `409`.
 
 ### PostgreSQL y migraciones
 
@@ -199,11 +199,13 @@ Las migraciones son el historial versionado del esquema. El repositorio tiene si
 | `SeedEnemigosIniciales` | Inserta los enemigos |
 | `PersistirEstadoInicialPartida` | Guarda el estado inicial de cada partida |
 | `AgregarDificultadYResultadoCombate` | Agrega dificultad y resultado |
-| `AgregarHabilidadesPersonaje` | Crea habilidades y su relación N:M con personajes. **Sin aplicar** |
-| `IncorporarIdentityYRoles` | Agrega Identity y conserva a los usuarios existentes. **Sin aplicar** |
-| `ActualizarExperienciaEnemigos` | Cambia a 100 la XP de los tres enemigos, sin tocar el esquema. **Sin aplicar** |
+| `AgregarHabilidadesPersonaje` | Crea habilidades y su relación N:M con personajes |
+| `IncorporarIdentityYRoles` | Agrega Identity y conserva a los usuarios existentes |
+| `ActualizarExperienciaEnemigos` | Cambia a 100 la XP de los tres enemigos, sin tocar el esquema |
 
-La API **no aplica migraciones sola**. Al arrancar comprueba si hay pendientes: si las hay, se detiene y pide aplicarlas. Por eso, con las tres últimas sin aplicar, no arranca contra una base anterior.
+La API **no aplica migraciones sola**. Al arrancar comprueba si hay pendientes: si las hay, se detiene y pide aplicarlas. Por eso no arranca contra una base desactualizada.
+
+**Estado:** las siete están aplicadas en la base local y en Neon, con un respaldo previo en ambos casos.
 
 Los enemigos se cargan con `HasData` desde `DatosIniciales.cs`. Por eso cambiar un valor del catálogo modifica el modelo de EF Core y requiere una migración: sin ella, las bases existentes conservarían los valores anteriores.
 
@@ -388,9 +390,13 @@ El mapa va de 0 a 10 en X y de 0 a 6 en Y.
 
 1. El frontend envía `PATCH /api/partidas/{id}/movimiento` con la dirección.
 2. El repositorio actualiza la posición en un solo `UPDATE`, limitándola a los bordes y excluyendo la casilla del enemigo.
-3. Si intenta entrar en la casilla del enemigo o la partida terminó, la API responde `409`.
+3. La API responde `200` con `{ estado, danioRecibido }`. En un movimiento normal, `danioRecibido` es 0.
 
-Se envía una petición por casilla, nunca una por fotograma. Mantener una tecla apretada no repite el movimiento.
+**Colisión con el enemigo:** si el Guerrero intenta entrar en la casilla del enemigo, no se mueve y el enemigo contraataca. El backend calcula el daño con `ReglasCombate.ResolverContraataque`, que es el mismo contraataque que sigue a un ataque, y lo persiste con la misma escritura condicional del ataque. La API responde `200` con la vida actualizada en `estado` y el daño en `danioRecibido`. Si el golpe deja al Guerrero en 0, la partida termina en Derrota. El contraataque nunca da la victoria, no otorga experiencia y no afecta el desbloqueo de Difícil.
+
+**Movimientos rechazados:** una partida finalizada responde `409`, y también una partida que cambió mientras se aplicaba el contraataque. Una dirección inválida responde `400`, y una partida inexistente o ajena, `404`. En el borde del mapa, el personaje se queda en su lugar y la respuesta es `200`.
+
+Se envía una petición por casilla, nunca una por fotograma. Mantener una tecla apretada no repite el movimiento, así que cada pulsación contra el enemigo produce como máximo un contraataque. El frontend no reproduce la caminata en ese caso: muestra el ataque del enemigo y el destello rojo según el `danioRecibido` que confirma el backend.
 
 ### Combate
 
@@ -403,6 +409,8 @@ Para atacar, el jugador debe estar en una casilla adyacente, sin diagonales.
 4. Si el jugador llega a 0: Derrota.
 5. Si ninguno muere: la partida sigue activa.
 ```
+
+**Contraataque por colisión:** si el jugador intenta entrar en la casilla del enemigo, se aplican solo los pasos 3 a 5. El jugador no golpea ni se mueve, y el enemigo contraataca con el mismo daño. Ver [Movimiento](#movimiento).
 
 **De dónde salen los valores**
 
@@ -436,7 +444,7 @@ Es la única habilidad especial, y está disponible desde el nivel 2.
 
 **Implementación:** una regla por nivel en `ReglasCombate`. No usa la tabla N:M de habilidades ni un sistema genérico, y no agregó columnas.
 
-Con un personaje nuevo, atacando siempre de la misma forma:
+Con un personaje nuevo, atacando siempre de la misma forma y sin intentar entrar en la casilla del enemigo. Cada intento suma un contraataque que la tabla no contempla:
 
 | Enemigo y dificultad | Ataque básico | Golpe poderoso |
 |---|---|---|
@@ -450,6 +458,8 @@ Con un personaje nuevo, atacando siempre de la misma forma:
 ### Responsabilidad del backend
 
 Los pedidos de ataque **no llevan cuerpo**: el cliente no puede enviar daño, vida, resultado ni desbloqueos. `ReglasCombate` calcula todo. El frontend solo usa la adyacencia y el dato `golpePoderosoDesbloqueado` para habilitar los botones. Es una ayuda visual: si no coincide, el backend igual rechaza la acción.
+
+Al mover, el frontend compara la casilla de destino con la del enemigo, solo para no reproducir la caminata. El bloqueo, el daño y su persistencia son del backend.
 
 ### Finalización de partidas
 
@@ -498,6 +508,7 @@ Subir de nivel no cambia vida, ataque ni defensa.
 | `GameHud` | Vida, nivel y experiencia |
 | `CombatPanel` | Botones de ataque y Golpe poderoso, y daño del último golpe |
 | `GameInfoPanel` | Datos de la partida y botón de abandono |
+| `BattleEndPanel` | Aviso de victoria o derrota sobre la escena, con «Continuar» para abrir el resultado |
 | `GameResultPanel` | Victoria, derrota o partida finalizada |
 | `TouchControls` | Flechas para pantallas táctiles |
 
@@ -533,9 +544,10 @@ Los componentes no llaman a `fetch` directamente:
 | `frontend/marrow-web/tests` | Flujos con Playwright y API simulada | No |
 
 - `dotnet test backend/Marrow.sln` ejecuta las dos primeras suites.
-- **Autorización:** las pruebas comprueban que partidas exija el rol `Jugador` y que un token sin ese rol reciba `403`. Se modificaron después de la última ejecución y todavía no se ejecutaron.
-- **`Marrow.API.PostgresTests`** está fuera de la solución a propósito. Requiere `MARROW_TEST_CONNECTION`, una base `marrow_test` preparada y autorización expresa, porque se conecta a una base real. Todavía falta prepararla.
+- **Autorización:** las pruebas comprueban que partidas exija el rol `Jugador` y que un token sin ese rol reciba `403`.
+- **`Marrow.API.PostgresTests`** está fuera de la solución a propósito. Requiere `MARROW_TEST_CONNECTION`, una base `marrow_test` preparada y autorización expresa, porque se conecta a una base real. Se ejecutó contra `marrow_test` antes de los últimos cambios: queda por actualizar una aserción que espera una excepción de PostgreSQL, porque el manejador global ahora la convierte en un `500`.
 - **Playwright** se ejecuta en local con `npm run test:e2e`. No está en GitHub Actions, porque `playwright.config.js` usa `npm.cmd`, que solo existe en Windows.
+- **Última validación (24 de noviembre de 2026):** con los cambios locales, `Marrow.sln` compiló en Release con 0 errores y 2 advertencias `CS1573` de documentación XML en `ResultadoPartida.cs`. Pasaron las 353 pruebas de `Marrow.API.Tests` y las 216 de `Marrow.API.IntegrationTests`, 569 en total, y el lint y el build del frontend terminaron sin errores. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
 
 ## Configuración y ejecución
 
@@ -603,7 +615,7 @@ Para probar un endpoint protegido en Swagger, iniciá sesión, copiá el token y
 | CORS | `http://localhost:5173` | Debe configurarse; sin él, la API no arranca |
 | Configuración faltante | Sin validación estricta al inicio | Detiene el arranque e indica la variable |
 | URL de la API en el frontend | `localhost:5137` por defecto | `VITE_API_URL` obligatoria al construir |
-| Base de datos | PostgreSQL local | PostgreSQL externo; la opción prevista es Neon |
+| Base de datos | PostgreSQL local | PostgreSQL en Neon |
 
 En Production, la conexión se configura con `ConnectionStrings__MarrowDatabase`, en formato clave=valor. Los pasos para Neon y Docker están en [DESPLIEGUE.md](DESPLIEGUE.md).
 
@@ -612,7 +624,7 @@ En Production, la conexión se configura con `ConnectionStrings__MarrowDatabase`
 - **Docker:** la API y el frontend tienen un Dockerfile multietapa cada uno, y sus imágenes finales no incluyen SDK, Node ni código fuente. Los secretos llegan por variables de entorno, y `appsettings.json` no entra en la imagen. `docker-compose.yml` sirve para probarlas en local, sin PostgreSQL.
 - **CI:** `.github/workflows/ci.yml` corre en cada push y Pull Request a `master` o `main`. Compila y prueba el backend, y ejecuta lint y build del frontend. No despliega nada.
 
-Ambos están configurados, pero todavía no se ejecutaron.
+Las imágenes se construyeron y se probaron en local con Docker Compose, y el CI tuvo una ejecución exitosa en GitHub. El backend y el frontend están desplegados en Render, sin los últimos cambios locales; el repositorio no incluye la configuración de esos servicios.
 
 ## Conceptos importantes para defender
 
@@ -715,18 +727,27 @@ Comprueba automáticamente cada cambio al subirlo.
 
 Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 
-**Preparado, pero sin ejecutar**
+**Ya implementado**
 
 | Tema | Estado actual |
 |---|---|
-| Identity, roles y N:M | Implementados en código. Sus dos migraciones no se aplicaron, y la API no arranca contra una base sin ellas |
-| XP de 100 en el catálogo | En código. La base conserva 10, 20 y 35 hasta aplicar `ActualizarExperienciaEnemigos` |
-| Corrección de personajes | En código. Todavía no se ejecutó contra una base |
-| Neon | Documentado. No existe el proyecto ni una conexión real |
-| Docker | Configurado. No se construyeron imágenes ni se levantaron contenedores |
-| CI | Configurado. No se ejecutó en GitHub, y el remoto todavía no está conectado |
-| Pruebas de PostgreSQL real | Existen, pero requieren preparación |
-| Despliegue real | Solo está preparada la configuración. No se publicó |
+| Identity, roles y N:M | Implementados, con sus migraciones aplicadas en la base local y en Neon |
+| XP de 100 en el catálogo | Implementada, con `ActualizarExperienciaEnemigos` aplicada en ambas bases |
+| Corrección de personajes | Implementada. Se ejecuta en cada arranque de la API |
+| Neon | Base de producción configurada y con las siete migraciones aplicadas |
+| Docker | Imágenes construidas y probadas en local con Docker Compose |
+| CI | Configurado, con una ejecución exitosa en GitHub |
+| Despliegue | Backend y frontend desplegados en Render, sin los últimos cambios locales |
+| Contraataque por colisión | Implementado. Pasan sus pruebas del backend, y el autor lo probó manualmente |
+| Últimos cambios del frontend | Sprites, `BattleEndPanel` e ingreso directo a la partida nueva. Pasan lint y build, y el autor los probó manualmente |
+
+**Pendiente de validar**
+
+| Tema | Estado actual |
+|---|---|
+| Pruebas E2E | No se ejecutaron con los últimos cambios. Falta corregir una aserción sobre la opción Difícil bloqueada y revisar los flujos que cambiaron |
+| Pruebas de PostgreSQL real | Se ejecutaron contra `marrow_test` antes de los últimos cambios. Falta actualizar una aserción |
+| CI y despliegue | Los últimos cambios todavía no pasaron por el CI ni se desplegaron en Render |
 
 **No implementado**
 
@@ -737,14 +758,14 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 | `DELETE` de partidas y enemigos | No existe, a propósito. El CRUD completo solo está en personajes |
 | Interfaz para eliminar personajes | El endpoint existe, pero el frontend no lo usa |
 | Playwright en CI | No está integrado |
-| Despliegue continuo | No está configurado |
+| Despliegue continuo | No está configurado en el repositorio |
 
 **Límites del juego**
 
-- **Derrota poco frecuente:** con las estadísticas iniciales, solo se puede perder contra el Orco en Difícil. En Normal se gana contra los tres enemigos incluso solo con el ataque básico.
+- **Derrota poco frecuente:** con las estadísticas iniciales y sin chocar con el enemigo, solo se puede perder contra el Orco en Difícil, y en Normal se gana contra los tres incluso solo con el ataque básico. Las colisiones repetidas pueden provocar la derrota contra cualquiera de ellos.
 - **Golpe poderoso domina desde el nivel 2:** no tiene coste ni espera, así que el ataque básico deja de convenir. Contra el Orco en Difícil, solo usándolo casi siempre se puede ganar.
 - **Partidas anteriores:** las vidas máximas se calculan con las reglas actuales. Una partida creada antes de este cambio puede mostrar una vida actual distinta de esas referencias.
-- **El enemigo no se mueve:** solo responde cuando lo atacan.
+- **El enemigo no se mueve:** solo responde cuando lo atacan o cuando el jugador intenta entrar en su casilla.
 - **Movimiento sin mazmorra real:** el mapa no tiene paredes ni obstáculos.
 
 **Límites técnicos**
@@ -753,4 +774,4 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 - **Resultado en el listado:** se obtiene con una petición por cada partida finalizada de la página, porque `PartidaResponse` no lo incluye.
 - **Registro simultáneo:** el nombre tiene índice único, y dos registros simultáneos con el mismo nombre podrían terminar en un `500`. El email se comprueba en el servicio, sin índice único.
 - **Filtros:** se pierden al recargar la página.
-- **Validación:** esta guía se escribió antes de la validación general final y sin recorrer el flujo completo contra la API y PostgreSQL reales.
+- **Validación:** el flujo completo se recorrió contra la API y PostgreSQL reales antes de agregar el contraataque por colisión y los últimos cambios del frontend. Estos pasaron las pruebas del backend, el lint y el build, y el autor los probó manualmente; falta ejecutar Playwright y las pruebas de PostgreSQL real.

@@ -30,3 +30,6 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Consigna oficial del bootcamp: se conserva solo en local
+/Contenido para proyecto final bootcamp devlights.docx

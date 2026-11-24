@@ -1,14 +1,26 @@
 # Despliegue de Marrow
 
-Marrow necesita tres servicios, que pueden estar en cualquier proveedor:
+Marrow usa tres servicios. El despliegue actual está en Render y Neon, pero el código no depende de esos proveedores:
 
-| Servicio | Requisito |
-|---|---|
-| Base de datos | PostgreSQL 13 o superior; la opción prevista es Neon |
-| Backend | Runtime de .NET 10, con HTTPS provisto por la plataforma |
-| Frontend | Hosting de archivos estáticos, con HTTPS |
+| Servicio | Requisito | Despliegue actual |
+|---|---|---|
+| Base de datos | PostgreSQL 13 o superior | Neon |
+| Backend | Runtime de .NET 10, con HTTPS provisto por la plataforma | Render |
+| Frontend | Hosting de archivos estáticos, con HTTPS | Render |
 
-Esta guía describe la configuración preparada en el repositorio. Todavía no se ejecutó ningún despliegue real ni se probaron estos pasos: no existe una conexión a Neon, faltan aplicar las migraciones, y no se construyeron las imágenes Docker ni se ejecutó el CI.
+```text
+Navegador  →  Frontend (Render)
+Navegador  →  HTTPS/JSON con JWT  →  API (Render)  →  SSL  →  PostgreSQL (Neon)
+```
+
+El navegador descarga el frontend y desde ahí llama directamente a la API. Solo la API se conecta a la base.
+
+**Estado al 24 de noviembre de 2026**
+
+- **Despliegue:** el backend y el frontend están desplegados en Render, con la base en Neon. La configuración de esos servicios está en sus paneles, no en el repositorio, y no se revisó para esta guía.
+- **Cambios locales:** el contraataque por colisión y los últimos cambios del frontend no están en GitHub ni desplegados. En local, el backend compiló en Release y pasaron sus 569 pruebas, el lint y el build del frontend terminaron sin errores, y el autor probó los cambios manualmente. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
+
+Las secciones siguientes explican cómo se configura cada parte.
 
 ## 1. Base de datos
 
@@ -41,7 +53,7 @@ El repositorio tiene siete. `dotnet ef database update` aplica las que falten, e
 | 6 | `IncorporarIdentityYRoles` | Agrega Identity y conserva a los usuarios existentes |
 | 7 | `ActualizarExperienciaEnemigos` | Cambia a 100 la XP de los tres enemigos |
 
-**Estado:** las siete están aplicadas en la base local de desarrollo. En Neon todavía no se aplicó ninguna.
+**Estado:** las siete están aplicadas en la base local de desarrollo y en la rama `production` de Neon. Los cambios locales no agregan migraciones.
 
 - **Base nueva, como Neon:** se aplican las siete. La migración 7 corrige los valores que inserta la 2, así que no hay que saltear ninguna ni aplicarlas a mano.
 - **Base con datos:** antes de aplicar la migración 6, hacé un respaldo y seguí las [precauciones de la guía técnica](GUIA_TECNICA.md#postgresql-y-migraciones). Si hay nombres de usuario repetidos sin distinguir mayúsculas, la migración falla.
@@ -76,7 +88,7 @@ No elimina personajes, partidas ni usuarios, y la experiencia válida se conserv
 
 ### PostgreSQL en Neon
 
-Neon ofrece PostgreSQL administrado. Revisá en su sitio las condiciones vigentes del plan gratuito, porque pueden cambiar.
+Neon ofrece PostgreSQL administrado y es la base de producción actual. Estos pasos sirven para configurarla desde cero. Revisá en su sitio las condiciones vigentes del plan gratuito, porque pueden cambiar.
 
 **Crear el proyecto**
 
@@ -134,7 +146,7 @@ dotnet ef migrations script --idempotent --project backend/Marrow.API --output m
 
 ## 2. Backend
 
-Publicación:
+En Render, una aplicación .NET se despliega con Docker: ver la [sección 6](#6-docker). Para publicarla sin Docker en otro proveedor:
 
 ```bash
 dotnet publish backend/Marrow.API -c Release -o publish
@@ -181,13 +193,13 @@ npm ci --prefix frontend/marrow-web
 npm run build --prefix frontend/marrow-web
 ```
 
-Publicá la carpeta `frontend/marrow-web/dist`. No hace falta configurar reescrituras de rutas, porque la aplicación usa una sola URL.
+Publicá la carpeta `frontend/marrow-web/dist`. En Render, usá `frontend/marrow-web` como **Root Directory**, `npm ci && npm run build` como comando de build y `dist` como carpeta a publicar. No hace falta configurar reescrituras de rutas, porque la aplicación usa una sola URL.
 
 Las variables `VITE_` quedan visibles en el navegador: nunca pongas secretos en ellas.
 
 ## 4. Orden recomendado
 
-La API no arranca en producción sin el dominio del frontend, y el frontend necesita la URL de la API para construirse. Por eso conviene:
+Para un despliegue desde cero: la API no arranca en producción sin el dominio del frontend, y el frontend necesita la URL de la API para construirse. Por eso conviene:
 
 1. Crear la base de datos en Neon, o en otro proveedor de PostgreSQL, y aplicar las siete migraciones.
 2. Reservar el dominio del frontend en el proveedor.
@@ -196,9 +208,13 @@ La API no arranca en producción sin el dominio del frontend, y el frontend nece
 5. Construir y publicar el frontend con esa URL en `VITE_API_URL`.
 6. Hacer la comprobación final.
 
-Estos pasos son manuales: el repositorio no incluye despliegue continuo ni la configuración de un proveedor concreto.
+El repositorio no incluye la configuración de Render ni un workflow de despliegue continuo.
+
+**Próxima publicación:** los cambios locales modifican la respuesta de `PATCH /api/partidas/{id}/movimiento`, así que el backend y el frontend deben actualizarse juntos.
 
 ## 5. Comprobación final
+
+Sirve para revisar cada despliegue y no registra resultados: no se completó sobre Render para esta guía. Antes del despliegue, la API se probó desde una máquina local en modo Production contra Neon: arranque, catálogo de enemigos, registro, inicio de sesión y creación de un personaje.
 
 - [ ] El registro del backend muestra que la API inició en el entorno `Production`.
 - [ ] `GET /api/enemigos` devuelve Goblin, Esqueleto y Orco, con 100 de experiencia cada uno.
@@ -208,7 +224,7 @@ Estos pasos son manuales: el repositorio no incluye despliegue continuo ni la co
 
 ## 6. Docker
 
-Es una alternativa para publicar el backend y el frontend. Las imágenes no incluyen secretos y no aplican migraciones. Estos pasos todavía no se ejecutaron.
+Es una alternativa para publicar el backend y el frontend. Las imágenes no incluyen secretos y no aplican migraciones. El 9 de noviembre de 2026 se construyeron y se probaron en local con Docker Compose y una base PostgreSQL local. La prueba no se repitió con los cambios posteriores.
 
 **API:** con `backend/.env` creado a partir de `backend/.env.example`:
 
@@ -243,20 +259,19 @@ docker compose up --build
 - **Backend:** restaura, compila en `Release` y ejecuta las pruebas de `backend/Marrow.sln`.
 - **Frontend:** ejecuta `npm ci`, lint y build.
 
-No necesita secretos ni PostgreSQL, y no despliega nada. Quedan fuera `Marrow.API.PostgresTests` y Playwright. Empieza a funcionar cuando el código se sube a GitHub. El despliegue continuo no está configurado.
+No necesita secretos ni PostgreSQL, y no despliega nada. Quedan fuera `Marrow.API.PostgresTests` y Playwright. Su única ejecución en GitHub, sobre el commit `79246da`, fue exitosa. Los cambios locales todavía no pasaron por el CI.
 
-## 8. Decisiones pendientes
+## 8. Decisiones y pendientes
 
-El repositorio no fija proveedores. Antes del despliegue real hay que definir:
-
-| Decisión | Qué implica en el proyecto |
+| Tema | Estado |
 |---|---|
-| Dónde se ejecuta el backend | Un servicio con runtime de .NET 10 (sección 2) o con contenedores (sección 6) |
-| Dónde se publica el frontend | Un hosting de archivos estáticos, o la imagen con nginx |
-| Dominios y HTTPS | Definen `Cors__AllowedOrigins__0` y `VITE_API_URL` |
-| Base de producción | Neon está previsto; falta aplicar las migraciones y comprobar la conexión |
-| Administrador inicial | Opcional: crearlo o no con `AdministradorInicial__*` |
-| Despliegue continuo | No está configurado. Requiere elegir el proveedor y guardar sus credenciales como secretos de GitHub |
+| Dónde se ejecuta el backend | Render |
+| Dónde se publica el frontend | Render |
+| Dominios y HTTPS | Definen `Cors__AllowedOrigins__0` y `VITE_API_URL`. Por verificar: los valores cargados en Render |
+| Base de producción | Neon, con las siete migraciones aplicadas y la conexión comprobada |
+| Administrador inicial | Opcional. No se creó en el primer arranque contra Neon. Por verificar: si se configuró después en Render |
+| Despliegue continuo | No está configurado en el repositorio. Por verificar en Render: si cada push a `master` publica automáticamente |
+| Cambios locales | Validados en local, salvo `Marrow.API.PostgresTests` y Playwright. Falta subirlos a GitHub y desplegarlos |
 | Pruebas E2E en CI | Hoy no corren en CI, porque `playwright.config.js` usa `npm.cmd`, que solo existe en Windows |
 
 ## Problemas frecuentes
@@ -266,6 +281,7 @@ El repositorio no fija proveedores. Antes del despliegue real hay que definir:
 | La API no arranca: "Falta configurar…" | Falta la variable que indica el mensaje |
 | La API no arranca: "migraciones pendientes" | Falta el paso `dotnet ef database update` |
 | El navegador informa un error de CORS | `Cors__AllowedOrigins__0` no coincide exactamente con el dominio del frontend |
+| El build del frontend en Render falla en `npm ci` por falta de `package-lock.json` | El **Root Directory** no es `frontend/marrow-web` |
 | "Falta configurar VITE_API_URL" | El frontend se construyó sin esa variable |
 | Las sesiones se cerraron tras un despliegue | Cambió `Jwt__SigningKey` |
 | Personajes o partidas responden `403` | El token no tiene el rol `Jugador`: iniciá sesión de nuevo. Si persiste, revisá en el log del arranque si falló la asignación del rol |
