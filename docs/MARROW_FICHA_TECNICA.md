@@ -5,10 +5,10 @@ la [guía técnica](GUIA_TECNICA.md), la [guía de despliegue](DESPLIEGUE.md) y 
 [seguimiento de requisitos del bootcamp](requisitos/REQUISITOS_BOOTCAMP.md).
 
 > **Estado (24 de noviembre de 2026):** el alcance funcional está implementado. Las siete migraciones están aplicadas en la
-> base local y en Neon, Docker se probó en local, el CI tuvo una ejecución exitosa y el backend y el frontend están
-> desplegados en Render. El contraataque por colisión y los últimos cambios del frontend compilan, pasaron las pruebas del
-> backend y el lint y el build del frontend, y el autor los probó manualmente. Todavía no se ejecutaron Playwright ni las
-> pruebas de PostgreSQL sobre ellos, y no están desplegados.
+> base local y en Neon, Docker se probó en local, y la versión `2d328ce` está publicada en GitHub, con el CI correcto y el
+> backend y el frontend en línea en Render. El contraataque por colisión y los últimos cambios del frontend pasaron las pruebas
+> del backend y el lint y el build del frontend, y el autor los probó manualmente. Todavía no se ejecutaron Playwright ni las
+> pruebas de PostgreSQL sobre ellos.
 
 ## 1. Qué es Marrow
 
@@ -320,14 +320,14 @@ Los sprites están en `frontend/marrow-web/src/assets/sprites/`. Son recursos de
 
 - `dotnet test backend/Marrow.sln` ejecuta las dos primeras suites.
 - `npm run test:e2e --prefix frontend/marrow-web` ejecuta Playwright, solo en Windows.
-- **Pruebas automatizadas (24 de noviembre de 2026):** `Marrow.sln` compiló en Release con 0 errores y 2 advertencias
-  `CS1573` en `ResultadoPartida.cs`. Pasaron 353 de 353 en `Marrow.API.Tests` y 216 de 216 en
+- **Pruebas automatizadas locales (24 de noviembre de 2026, antes de publicar `2d328ce`):** `Marrow.sln` compiló en Release
+  con 0 errores y 2 advertencias `CS1573` en `ResultadoPartida.cs`. Pasaron 353 de 353 en `Marrow.API.Tests` y 216 de 216 en
   `Marrow.API.IntegrationTests`: 569 en total.
 - **Frontend:** `npm run lint` terminó sin observaciones y `npm run build` fue exitoso, con 52 módulos transformados. Las 9
   importaciones de sprites apuntan a archivos existentes.
 - **Comprobación manual:** el autor probó y aprobó el contraataque, el panel final, el ingreso directo a la partida y las
   animaciones.
-- **No ejecutado con estos cambios:** `Marrow.API.PostgresTests` y Playwright.
+- **No ejecutado sobre `2d328ce`:** `Marrow.API.PostgresTests` y Playwright.
 - Quedan por actualizar una aserción de `Marrow.API.PostgresTests` y una de Playwright, y por revisar los flujos E2E que
   cambiaron.
 
@@ -337,18 +337,16 @@ Los sprites están en `frontend/marrow-web/src/assets/sprites/`. Son recursos de
 |---|---|
 | Docker | Dockerfile multietapa para la API (runtime de .NET, puerto 8080) y para el frontend (nginx). `docker-compose.yml` sirve para prueba local y no incluye PostgreSQL. Las imágenes se construyeron y se probaron en local |
 | Neon | Base de producción configurada, con las siete migraciones aplicadas. La conexión local se configura con User Secrets |
-| CI | `.github/workflows/ci.yml`: compila y prueba el backend, y ejecuta lint y build del frontend. No incluye Playwright ni PostgreSQL. Tuvo una ejecución exitosa en GitHub |
-| Despliegue | Backend y frontend desplegados en Render. Cómo se configura: [DESPLIEGUE.md](DESPLIEGUE.md). Los últimos cambios locales todavía no están desplegados. El repositorio no incluye la configuración de Render ni despliegue continuo |
+| CI | `.github/workflows/ci.yml`: compila y prueba el backend, y ejecuta lint y build del frontend. No incluye Playwright ni PostgreSQL. Su ejecución sobre `2d328ce` fue exitosa |
+| Despliegue | `marrow-api` y `marrow-frontend` en línea en Render desde `2d328ce`, con Auto-Deploy en On Commit. Cómo se configura: [DESPLIEGUE.md](DESPLIEGUE.md). El repositorio no incluye la configuración de Render ni un workflow de despliegue |
 
 ## 15. Pendiente
 
-1. Actualizar las aserciones pendientes de `Marrow.API.PostgresTests` y Playwright, revisar los flujos E2E que cambiaron y
-   ejecutar ambas suites.
-2. Publicar el contraataque por colisión y los últimos cambios del frontend en GitHub, y desplegarlos en Render.
+- Actualizar las aserciones pendientes de `Marrow.API.PostgresTests` y Playwright, revisar los flujos E2E que cambiaron y
+  ejecutar ambas suites.
 
-**Ya completado:** validación general anterior a esos cambios, compilación y pruebas del backend, lint y build del frontend y
-prueba manual con ellos, migraciones en la base local y en Neon, imágenes Docker, CI y despliegue en Render de la versión
-anterior.
+**Ya completado:** validación general de `79246da`; compilación y pruebas del backend, lint y build del frontend y prueba manual
+de los cambios de `2d328ce`; migraciones en la base local y en Neon, imágenes Docker, CI y despliegue en Render.
 
 **Límites conocidos:**
 

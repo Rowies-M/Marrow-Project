@@ -17,8 +17,9 @@ El navegador descarga el frontend y desde ahí llama directamente a la API. Solo
 
 **Estado al 24 de noviembre de 2026**
 
-- **Despliegue:** el backend y el frontend están desplegados en Render, con la base en Neon. La configuración de esos servicios está en sus paneles, no en el repositorio, y no se revisó para esta guía.
-- **Cambios locales:** el contraataque por colisión y los últimos cambios del frontend no están en GitHub ni desplegados. En local, el backend compiló en Release y pasaron sus 569 pruebas, el lint y el build del frontend terminaron sin errores, y el autor probó los cambios manualmente. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
+- **Despliegue:** en Render, `marrow-api` y `marrow-frontend` están en estado Live, desplegados desde el commit `2d328ce`, con la base en Neon. Ambos tienen **Auto-Deploy** en **On Commit**.
+- **Configuración:** está en los paneles de Render y Neon, no en el repositorio. Las variables cargadas en Render no se revisaron para esta guía.
+- **Versión publicada:** `2d328ce` incluye el contraataque por colisión y los últimos cambios del frontend. Antes de publicarla, en local, el backend compiló en Release y pasaron sus 569 pruebas, el lint y el build del frontend terminaron sin errores, y el autor probó los cambios manualmente. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
 
 Las secciones siguientes explican cómo se configura cada parte.
 
@@ -53,7 +54,7 @@ El repositorio tiene siete. `dotnet ef database update` aplica las que falten, e
 | 6 | `IncorporarIdentityYRoles` | Agrega Identity y conserva a los usuarios existentes |
 | 7 | `ActualizarExperienciaEnemigos` | Cambia a 100 la XP de los tres enemigos |
 
-**Estado:** las siete están aplicadas en la base local de desarrollo y en la rama `production` de Neon. Los cambios locales no agregan migraciones.
+**Estado:** las siete están aplicadas en la base local de desarrollo y en la rama `production` de Neon. El commit `2d328ce` no agrega migraciones.
 
 - **Base nueva, como Neon:** se aplican las siete. La migración 7 corrige los valores que inserta la 2, así que no hay que saltear ninguna ni aplicarlas a mano.
 - **Base con datos:** antes de aplicar la migración 6, hacé un respaldo y seguí las [precauciones de la guía técnica](GUIA_TECNICA.md#postgresql-y-migraciones). Si hay nombres de usuario repetidos sin distinguir mayúsculas, la migración falla.
@@ -210,11 +211,11 @@ Para un despliegue desde cero: la API no arranca en producción sin el dominio d
 
 El repositorio no incluye la configuración de Render ni un workflow de despliegue continuo.
 
-**Próxima publicación:** los cambios locales modifican la respuesta de `PATCH /api/partidas/{id}/movimiento`, así que el backend y el frontend deben actualizarse juntos.
+**Publicaciones siguientes:** con Auto-Deploy en On Commit, cada push a la rama vinculada publica los servicios. Si un cambio modifica el contrato de la API, como hizo `2d328ce` con la respuesta de `PATCH /api/partidas/{id}/movimiento`, hay que comprobar que ambos queden en la misma versión.
 
 ## 5. Comprobación final
 
-Sirve para revisar cada despliegue y no registra resultados: no se completó sobre Render para esta guía. Antes del despliegue, la API se probó desde una máquina local en modo Production contra Neon: arranque, catálogo de enemigos, registro, inicio de sesión y creación de un personaje.
+Sirve para revisar cada despliegue y no registra resultados: no se completó sobre Render para esta guía. Antes del primer despliegue, la API se probó desde una máquina local en modo Production contra Neon: arranque, catálogo de enemigos, registro, inicio de sesión y creación de un personaje.
 
 - [ ] El registro del backend muestra que la API inició en el entorno `Production`.
 - [ ] `GET /api/enemigos` devuelve Goblin, Esqueleto y Orco, con 100 de experiencia cada uno.
@@ -224,7 +225,7 @@ Sirve para revisar cada despliegue y no registra resultados: no se completó sob
 
 ## 6. Docker
 
-Es una alternativa para publicar el backend y el frontend. Las imágenes no incluyen secretos y no aplican migraciones. El 9 de noviembre de 2026 se construyeron y se probaron en local con Docker Compose y una base PostgreSQL local. La prueba no se repitió con los cambios posteriores.
+Es una alternativa para publicar el backend y el frontend. Las imágenes no incluyen secretos y no aplican migraciones. El 9 de noviembre de 2026 se construyeron y se probaron en local con Docker Compose y una base PostgreSQL local. La prueba local no se repitió con `2d328ce`.
 
 **API:** con `backend/.env` creado a partir de `backend/.env.example`:
 
@@ -259,19 +260,19 @@ docker compose up --build
 - **Backend:** restaura, compila en `Release` y ejecuta las pruebas de `backend/Marrow.sln`.
 - **Frontend:** ejecuta `npm ci`, lint y build.
 
-No necesita secretos ni PostgreSQL, y no despliega nada. Quedan fuera `Marrow.API.PostgresTests` y Playwright. Su única ejecución en GitHub, sobre el commit `79246da`, fue exitosa. Los cambios locales todavía no pasaron por el CI.
+No necesita secretos ni PostgreSQL, y no despliega nada. Quedan fuera `Marrow.API.PostgresTests` y Playwright. Sus ejecuciones en GitHub sobre `79246da` y `2d328ce` fueron exitosas.
 
 ## 8. Decisiones y pendientes
 
 | Tema | Estado |
 |---|---|
-| Dónde se ejecuta el backend | Render |
-| Dónde se publica el frontend | Render |
+| Dónde se ejecuta el backend | Render, servicio `marrow-api` |
+| Dónde se publica el frontend | Render, servicio `marrow-frontend` |
 | Dominios y HTTPS | Definen `Cors__AllowedOrigins__0` y `VITE_API_URL`. Por verificar: los valores cargados en Render |
 | Base de producción | Neon, con las siete migraciones aplicadas y la conexión comprobada |
 | Administrador inicial | Opcional. No se creó en el primer arranque contra Neon. Por verificar: si se configuró después en Render |
-| Despliegue continuo | No está configurado en el repositorio. Por verificar en Render: si cada push a `master` publica automáticamente |
-| Cambios locales | Validados en local, salvo `Marrow.API.PostgresTests` y Playwright. Falta subirlos a GitHub y desplegarlos |
+| Despliegue continuo | Lo hace Render, con Auto-Deploy en On Commit en ambos servicios. No hay un workflow de despliegue en el repositorio |
+| Pruebas pendientes | `Marrow.API.PostgresTests` y Playwright no se ejecutaron sobre `2d328ce` |
 | Pruebas E2E en CI | Hoy no corren en CI, porque `playwright.config.js` usa `npm.cmd`, que solo existe en Windows |
 
 ## Problemas frecuentes

@@ -4,7 +4,7 @@ Marrow es un RPG web en 2D con vista desde arriba, desarrollado como proyecto fi
 
 El backend es la autoridad del juego: calcula daño, vida, resultados y progreso. El frontend muestra el estado y envía las acciones del jugador.
 
-> **Estado:** el alcance funcional está implementado. Las migraciones están aplicadas en la base local y en Neon, Docker se probó en local, el CI tuvo una ejecución exitosa y el backend y el frontend están desplegados en Render. El contraataque por colisión y los últimos cambios del frontend compilan, pasaron las pruebas del backend y el lint y el build del frontend, y fueron probados manualmente por el autor; todavía no se ejecutaron Playwright ni las pruebas de PostgreSQL sobre ellos, y no están desplegados. El detalle está en la [ficha técnica](docs/MARROW_FICHA_TECNICA.md).
+> **Estado:** el alcance funcional está implementado. Las migraciones están aplicadas en la base local y en Neon, Docker se probó en local, y la versión `2d328ce` está publicada en GitHub, con el CI correcto y el backend y el frontend en línea en Render. El contraataque por colisión y los últimos cambios del frontend pasaron las pruebas del backend y el lint y el build del frontend, y fueron probados manualmente por el autor; todavía no se ejecutaron Playwright ni las pruebas de PostgreSQL sobre ellos. El detalle está en la [ficha técnica](docs/MARROW_FICHA_TECNICA.md).
 
 ## Tecnologías
 

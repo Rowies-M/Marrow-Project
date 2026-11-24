@@ -545,9 +545,9 @@ Los componentes no llaman a `fetch` directamente:
 
 - `dotnet test backend/Marrow.sln` ejecuta las dos primeras suites.
 - **Autorización:** las pruebas comprueban que partidas exija el rol `Jugador` y que un token sin ese rol reciba `403`.
-- **`Marrow.API.PostgresTests`** está fuera de la solución a propósito. Requiere `MARROW_TEST_CONNECTION`, una base `marrow_test` preparada y autorización expresa, porque se conecta a una base real. Se ejecutó contra `marrow_test` antes de los últimos cambios: queda por actualizar una aserción que espera una excepción de PostgreSQL, porque el manejador global ahora la convierte en un `500`.
+- **`Marrow.API.PostgresTests`** está fuera de la solución a propósito. Requiere `MARROW_TEST_CONNECTION`, una base `marrow_test` preparada y autorización expresa, porque se conecta a una base real. Se ejecutó contra `marrow_test` sobre `79246da`: queda por actualizar una aserción que espera una excepción de PostgreSQL, porque el manejador global ahora la convierte en un `500`.
 - **Playwright** se ejecuta en local con `npm run test:e2e`. No está en GitHub Actions, porque `playwright.config.js` usa `npm.cmd`, que solo existe en Windows.
-- **Última validación (24 de noviembre de 2026):** con los cambios locales, `Marrow.sln` compiló en Release con 0 errores y 2 advertencias `CS1573` de documentación XML en `ResultadoPartida.cs`. Pasaron las 353 pruebas de `Marrow.API.Tests` y las 216 de `Marrow.API.IntegrationTests`, 569 en total, y el lint y el build del frontend terminaron sin errores. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
+- **Última validación local (24 de noviembre de 2026):** antes de publicar `2d328ce` y con esos mismos cambios, `Marrow.sln` compiló en Release con 0 errores y 2 advertencias `CS1573` de documentación XML en `ResultadoPartida.cs`. Pasaron las 353 pruebas de `Marrow.API.Tests` y las 216 de `Marrow.API.IntegrationTests`, 569 en total, y el lint y el build del frontend terminaron sin errores. No se ejecutaron `Marrow.API.PostgresTests` ni Playwright.
 
 ## Configuración y ejecución
 
@@ -624,7 +624,7 @@ En Production, la conexión se configura con `ConnectionStrings__MarrowDatabase`
 - **Docker:** la API y el frontend tienen un Dockerfile multietapa cada uno, y sus imágenes finales no incluyen SDK, Node ni código fuente. Los secretos llegan por variables de entorno, y `appsettings.json` no entra en la imagen. `docker-compose.yml` sirve para probarlas en local, sin PostgreSQL.
 - **CI:** `.github/workflows/ci.yml` corre en cada push y Pull Request a `master` o `main`. Compila y prueba el backend, y ejecuta lint y build del frontend. No despliega nada.
 
-Las imágenes se construyeron y se probaron en local con Docker Compose, y el CI tuvo una ejecución exitosa en GitHub. El backend y el frontend están desplegados en Render, sin los últimos cambios locales; el repositorio no incluye la configuración de esos servicios.
+Las imágenes se construyeron y se probaron en local con Docker Compose, y el CI fue exitoso en GitHub sobre `79246da` y `2d328ce`. El backend y el frontend están en línea en Render desde `2d328ce`, con Auto-Deploy en On Commit; el repositorio no incluye la configuración de esos servicios.
 
 ## Conceptos importantes para defender
 
@@ -736,8 +736,9 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 | Corrección de personajes | Implementada. Se ejecuta en cada arranque de la API |
 | Neon | Base de producción configurada y con las siete migraciones aplicadas |
 | Docker | Imágenes construidas y probadas en local con Docker Compose |
-| CI | Configurado, con una ejecución exitosa en GitHub |
-| Despliegue | Backend y frontend desplegados en Render, sin los últimos cambios locales |
+| CI | Configurado, con ejecución exitosa en GitHub sobre `2d328ce` |
+| Despliegue | Backend y frontend en línea en Render desde `2d328ce` |
+| Despliegue continuo | Auto-Deploy de Render en On Commit, en ambos servicios. No hay un workflow de despliegue en el repositorio |
 | Contraataque por colisión | Implementado. Pasan sus pruebas del backend, y el autor lo probó manualmente |
 | Últimos cambios del frontend | Sprites, `BattleEndPanel` e ingreso directo a la partida nueva. Pasan lint y build, y el autor los probó manualmente |
 
@@ -745,9 +746,8 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 
 | Tema | Estado actual |
 |---|---|
-| Pruebas E2E | No se ejecutaron con los últimos cambios. Falta corregir una aserción sobre la opción Difícil bloqueada y revisar los flujos que cambiaron |
-| Pruebas de PostgreSQL real | Se ejecutaron contra `marrow_test` antes de los últimos cambios. Falta actualizar una aserción |
-| CI y despliegue | Los últimos cambios todavía no pasaron por el CI ni se desplegaron en Render |
+| Pruebas E2E | No se ejecutaron sobre `2d328ce`. Falta corregir una aserción sobre la opción Difícil bloqueada y revisar los flujos que cambiaron |
+| Pruebas de PostgreSQL real | Se ejecutaron contra `marrow_test` sobre `79246da`, no sobre `2d328ce`. Falta actualizar una aserción |
 
 **No implementado**
 
@@ -758,7 +758,6 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 | `DELETE` de partidas y enemigos | No existe, a propósito. El CRUD completo solo está en personajes |
 | Interfaz para eliminar personajes | El endpoint existe, pero el frontend no lo usa |
 | Playwright en CI | No está integrado |
-| Despliegue continuo | No está configurado en el repositorio |
 
 **Límites del juego**
 
@@ -774,4 +773,4 @@ Conviene conocerlos antes de la defensa, para no presentarlos como terminados.
 - **Resultado en el listado:** se obtiene con una petición por cada partida finalizada de la página, porque `PartidaResponse` no lo incluye.
 - **Registro simultáneo:** el nombre tiene índice único, y dos registros simultáneos con el mismo nombre podrían terminar en un `500`. El email se comprueba en el servicio, sin índice único.
 - **Filtros:** se pierden al recargar la página.
-- **Validación:** el flujo completo se recorrió contra la API y PostgreSQL reales antes de agregar el contraataque por colisión y los últimos cambios del frontend. Estos pasaron las pruebas del backend, el lint y el build, y el autor los probó manualmente; falta ejecutar Playwright y las pruebas de PostgreSQL real.
+- **Validación:** el flujo completo se recorrió contra la API y PostgreSQL reales sobre el código de `79246da`. El contraataque por colisión y los últimos cambios del frontend, incluidos en `2d328ce`, pasaron las pruebas del backend, el lint y el build, y el autor los probó manualmente; falta ejecutar Playwright y las pruebas de PostgreSQL real.

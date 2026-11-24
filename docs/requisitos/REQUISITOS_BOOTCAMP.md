@@ -1,8 +1,8 @@
 # Requisitos del bootcamp: seguimiento en Marrow
 
 Síntesis de `Contenido para proyecto final bootcamp devlights.docx`, organizada según sus cuatro bloques y unidades.
-El estado se revisó el 2026-11-24 sobre el commit `79246da` y los cambios locales posteriores, leyendo el código y los
-resultados de las validaciones, incluida la de ese día. No se consultaron las bases de datos ni los servicios de Render.
+El estado se revisó el 2026-11-24 sobre el commit `2d328ce`, leyendo el código y los resultados de las
+validaciones, incluida la de ese día. El estado de Render es el informado por el autor; no se consultaron las bases de datos.
 
 **Esto no es una rúbrica de aprobación.** Es un seguimiento de los contenidos del programa. El documento no indica cuáles
 son obligatorios para aprobar, y "Pautas finales del proyecto integrador" aparece sin detalle.
@@ -10,7 +10,7 @@ son obligatorios para aprobar, y "Pautas finales del proyecto integrador" aparec
 ## Alcance funcional definitivo de Marrow
 
 Es la decisión del proyecto, no un requisito del programa. Todos sus puntos están implementados en código. El flujo principal
-se recorrió en ejecución el 2026-11-09, antes de los cambios locales posteriores a `79246da`.
+se recorrió en ejecución el 2026-11-09, sobre el código de `79246da`, anterior a los cambios de `2d328ce`.
 
 - Mapa de 11 × 7 casillas y movimiento en cuatro direcciones.
 - Una clase: Guerrero.
@@ -111,8 +111,8 @@ Objetivo del bloque: base de datos relacional integrada con EF Core, PostgreSQL,
 Objetivo del bloque: API robusta lista para consumir desde el frontend.
 
 - [x] React. Figura en el título del bloque, sin unidad propia. El frontend tiene conectado el flujo principal, recorrido
-  contra la API y PostgreSQL locales el 2026-11-09. Los cambios posteriores del frontend pasaron lint y build, y el
-  autor los probó manualmente; no se ejecutó Playwright.
+  contra la API y PostgreSQL locales el 2026-11-09. Los cambios del frontend en `2d328ce` pasaron lint y build, y
+  el autor los probó manualmente; no se ejecutó Playwright.
 
 ### Unidad 10: JWT y CORS
 
@@ -147,9 +147,8 @@ Objetivo de la unidad: Web API desplegada en la nube con base productiva y Docke
 - [x] Dockerfile multietapa. API y frontend, con Docker Compose para prueba local. Las imágenes se construyeron y se probaron
   en local el 2026-11-09.
 - [x] PostgreSQL en la nube (Render, Supabase o Neon). Se usa Neon, con la conexión comprobada desde la API en modo Production.
-- [~] Despliegue continuo desde GitHub. El backend y el frontend están desplegados en Render y el código está en GitHub. El
-  repositorio solo incluye CI, sin despliegue. Por verificar en Render: el vínculo con el repositorio y la publicación
-  automática.
+- [x] Despliegue continuo desde GitHub. `marrow-api` y `marrow-frontend` están en línea en Render, desplegados desde
+  `2d328ce`, con Auto-Deploy en On Commit. No hay un workflow de despliegue en el repositorio.
 - [x] Migraciones en producción. Las 7 se aplicaron en la rama `production` de Neon el 2026-11-09.
 - [~] Variables de entorno seguras. La configuración por entorno y su validación están implementadas, y `appsettings.json` solo
   tiene marcadores en su cadena local. Por verificar: los valores cargados en Render.
@@ -159,13 +158,12 @@ Objetivo de la unidad: Web API desplegada en la nube con base productiva y Docke
 
 **Preparado, falta ejecutar o configurar**
 
-- Subir a GitHub y desplegar los cambios locales posteriores a `79246da`.
 - Corregir una prueba de `Marrow.API.PostgresTests` y una de Playwright, revisar los flujos E2E que cambiaron y ejecutar ambas
-  suites con esos cambios.
+  suites sobre `2d328ce`.
 
 **Por verificar**
 
-- El vínculo de Render con GitHub, la publicación automática y las variables cargadas.
+- Las variables cargadas en Render.
 - El inicio de sesión con una cuenta anterior a la migración de Identity.
 - El uso del candado de Swagger con un token.
 - Los puntos marcados "Por verificar" sin evidencia en el repositorio: el modelo de dominio en consola, la etapa de API en
@@ -186,13 +184,13 @@ Estos puntos no figuran como requisitos en el documento original, pero forman pa
 - [x] Logging con `ILogger<T>`. Inicio, detención, datos iniciales, autenticación, partidas y errores, sin datos sensibles.
 - [x] Estados de carga, vacíos y errores en el frontend.
 - [x] Pruebas automatizadas con xUnit y Playwright. Las de Playwright no están integradas en GitHub Actions.
-- [x] Integración continua con GitHub Actions. Su ejecución sobre `79246da` fue exitosa.
+- [x] Integración continua con GitHub Actions. Sus ejecuciones sobre `79246da` y `2d328ce` fueron exitosas.
 - [x] Contraataque por colisión y últimos cambios del frontend: sprites, `BattleEndPanel` e ingreso directo a la partida nueva.
-  Compilados y probados solo en local, con las pruebas del backend y una comprobación manual del autor; sin Playwright y sin
-  desplegar.
+  Publicados en `2d328ce`, con las pruebas del backend y una comprobación manual del autor previas a la publicación; sin
+  Playwright.
 - [x] Documentación del proyecto. `README.md`, `docs/GUIA_TECNICA.md` y `docs/DESPLIEGUE.md`.
 
-**Validación de los cambios locales (2026-11-24):**
+**Validación local de los cambios de `2d328ce` (2026-11-24, antes de publicarlos):**
 
 - **Automatizada:** `Marrow.sln` compiló en Release con 0 errores y 2 advertencias `CS1573` en `ResultadoPartida.cs`. Pasaron
   353 de 353 pruebas de `Marrow.API.Tests` y 216 de 216 de `Marrow.API.IntegrationTests`: 569 en total. El lint y el build del
